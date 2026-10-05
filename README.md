@@ -40,6 +40,18 @@ Set-ExecutionPolicy -Scope Process Bypass
 | Apps | Removes Store bloat (Clipchamp, Solitaire, Bing News/Weather, Teams, Phone Link, Copilot, etc.). Optional picker at the end lets you choose installed programs to uninstall |
 | Cleanup | Temp files, DNS cache, SSD TRIM, .NET compile queue |
 
+## UI wrapper
+
+A Windows-native C++ launcher is also included under the [cpp_ui](cpp_ui) folder. It provides a cleaner dark-mode UI with tabs for:
+
+- Home / profile selection
+- Performance features
+- Apps to install
+- Startup controls
+- Services controls
+
+This keeps the core logic in the PowerShell optimizer but improves the desktop feel with a more app-like front end.
+
 It does **not** disable Windows Defender, Windows Update, the firewall, networking, audio, or graphics.
 
 ## Settings

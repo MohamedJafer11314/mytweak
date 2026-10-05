@@ -33,6 +33,564 @@ $ProtectedServices = @('W32Time','Dhcp','Dnscache','MpsSvc','WinDefender','Secur
 $ProtectedApps = @('Microsoft.WindowsStore','Microsoft.WindowsCalculator','Microsoft.Windows.Photos','Microsoft.XboxApp')
 # =====================================================================================
 
+# Advanced tweak catalog for the interactive selection UI
+$script:TweakCatalog = @(
+    [pscustomobject]@{ Id='DisableSearchIndexer'; Title='Disable Search Indexer'; Category='Performance'; Risk='Low'; Description='Disables Windows Search indexing to reduce background activity. Useful if you use Everything or similar tools.'; Enabled=$false },
+    [pscustomobject]@{ Id='DisableAnyDesk'; Title='Disable AnyDesk'; Category='Services'; Risk='Low'; Description='Sets AnyDesk service to Manual so it stays available but does not run in the background automatically.'; Enabled=$false },
+    [pscustomobject]@{ Id='RemoveStoreBloat'; Title='Remove Store bloat'; Category='Apps'; Risk='Low'; Description='Removes common preinstalled apps like Clipchamp, Teams, Solitaire, Weather, News, Phone Link, and Copilot-related clutter.'; Enabled=$true },
+    [pscustomobject]@{ Id='DisableAnimations'; Title='Disable animations'; Category='Visuals'; Risk='Low'; Description='Disables transparency, animation, taskbar motion, and UI effects for a snappier feeling.'; Enabled=$true },
+    [pscustomobject]@{ Id='DisableToastNotifs'; Title='Disable toast notifications'; Category='Privacy'; Risk='Low'; Description='Turns off all popup notifications from Windows to reduce distraction and interruptions.'; Enabled=$false },
+    [pscustomobject]@{ Id='FastKillHungApps'; Title='Kill hung apps faster'; Category='Performance'; Risk='Medium'; Description='Changes timeout values so apps that stop responding are torn down faster. Unsaved work can be lost.'; Enabled=$false },
+    [pscustomobject]@{ Id='TunePowerOnAC'; Title='Tune power plan for performance'; Category='Power'; Risk='Low'; Description='Applies AC power values for higher CPU boost, cooling priority, and less USB/PCIe sleep.'; Enabled=$true },
+    [pscustomobject]@{ Id='LimitDefenderCpu'; Title='Limit Defender CPU usage'; Category='Security'; Risk='Low'; Description='Sets Defender scans to use less CPU while keeping protection enabled.'; Enabled=$true },
+    [pscustomobject]@{ Id='DisableHibernation'; Title='Disable hibernation'; Category='Storage'; Risk='Low'; Description='Turns off hibernation to free disk space equal to RAM size.'; Enabled=$false },
+    [pscustomobject]@{ Id='DefenderExclusions'; Title='Game exclusions'; Category='Security'; Risk='Low'; Description='Adds exclusions for .minecraft and .lunarclient if you trust the mod directories.'; Enabled=$false },
+    [pscustomobject]@{ Id='CheckInstallUtil'; Title='Check InstallUtil'; Category='Security'; Risk='Low'; Description='Creates a report for InstallUtil.exe to detect suspicious or abnormal execution.'; Enabled=$true },
+    [pscustomobject]@{ Id='PickProgramsToUninstall'; Title='Pick programs to uninstall'; Category='Apps'; Risk='Medium'; Description='Shows a list of non-system apps so you can uninstall extras by selection.'; Enabled=$true },
+    [pscustomobject]@{ Id='InstallBrowsers'; Title='Install browsers & tools'; Category='Apps'; Risk='Low'; Description='Offers Chrome, Brave, Firefox, 7-Zip, VLC, and other useful programs using winget.'; Enabled=$false },
+    [pscustomobject]@{ Id='ManageStartupItems'; Title='Manage startup apps'; Category='Startup'; Risk='Low'; Description='Shows startup entries and lets you disable unnecessary background apps that launch at logon.'; Enabled=$false },
+    [pscustomobject]@{ Id='ManageServices'; Title='Manage Windows services'; Category='Services'; Risk='Medium'; Description='Review common services and switch them to Manual or Disabled based on your needs.'; Enabled=$false },
+    [pscustomobject]@{ Id='DisableWidgets'; Title='Disable Widgets / Chat'; Category='Privacy'; Risk='Low'; Description='Turns off quick-launch widgets and chat surfaces that add background noise.'; Enabled=$false },
+    [pscustomobject]@{ Id='TuneStorage'; Title='Clean temp + cache'; Category='Storage'; Risk='Low'; Description='Removes temporary files, browser caches, and other junk that accumulates over time.'; Enabled=$true },
+    [pscustomobject]@{ Id='ResetExplorer'; Title='Restart Explorer'; Category='System'; Risk='Low'; Description='Restarts Windows Explorer so visual and taskbar changes apply immediately.'; Enabled=$true },
+    [pscustomobject]@{ Id='TrimVolume'; Title='Run SSD TRIM'; Category='System'; Risk='Low'; Description='Runs SSD trim and temp cleanup to improve responsiveness and remove temporary junk.'; Enabled=$true },
+    [pscustomobject]@{ Id='FlushDNS'; Title='Flush DNS'; Category='Network'; Risk='Low'; Description='Clears cached DNS entries to resolve some connection or resolution problems.'; Enabled=$true }
+)
+
+$script:SoftwareCatalog = @(
+    [pscustomobject]@{ Id='GoogleChrome'; Name='Google Chrome'; Category='Browser'; InstallCmd='winget install --id Google.Chrome -e --accept-source-agreements --accept-package-agreements'; Description='Fast and stable browser with strong compatibility.' },
+    [pscustomobject]@{ Id='Brave'; Name='Brave Browser'; Category='Browser'; InstallCmd='winget install --id Brave.Brave -e --accept-source-agreements --accept-package-agreements'; Description='Privacy-focused browser with ad blocking and speed improvements.' },
+    [pscustomobject]@{ Id='Firefox'; Name='Mozilla Firefox'; Category='Browser'; InstallCmd='winget install --id Mozilla.Firefox -e --accept-source-agreements --accept-package-agreements'; Description='Open-source browser for privacy and flexibility.' },
+    [pscustomobject]@{ Id='7Zip'; Name='7-Zip'; Category='Utility'; InstallCmd='winget install --id 7zip.7zip -e --accept-source-agreements --accept-package-agreements'; Description='Powerful archive manager for ZIP, 7z, RAR, and more.' },
+    [pscustomobject]@{ Id='VLC'; Name='VLC Media Player'; Category='Utility'; InstallCmd='winget install --id VideoLAN.VLC -e --accept-source-agreements --accept-package-agreements'; Description='Reliable media player for local files and streaming.' },
+    [pscustomobject]@{ Id='NotepadPlusPlus'; Name='Notepad++'; Category='Utility'; InstallCmd='winget install --id Notepad++.Notepad++ -e --accept-source-agreements --accept-package-agreements'; Description='Lightweight code and text editor with syntax highlighting.' },
+    [pscustomobject]@{ Id='WinRAR'; Name='WinRAR'; Category='Utility'; InstallCmd='winget install --id RARLab.WinRAR -e --accept-source-agreements --accept-package-agreements'; Description='Classic archival tool for compressed files.' },
+    [pscustomobject]@{ Id='MicrosoftPowerToys'; Name='Microsoft PowerToys'; Category='Utility'; InstallCmd='winget install --id Microsoft.PowerToys -e --accept-source-agreements --accept-package-agreements'; Description='Adds useful enhancements like FancyZones, PowerRename, and more.' }
+)
+
+$script:CustomTweakSelections = @()
+
+function Get-SelectedTweakNames {
+    param([string[]]$names)
+    foreach($n in $names){
+        $t = $script:TweakCatalog | Where-Object { $_.Id -eq $n }
+        if($t){ $script:CustomTweakSelections += $n }
+    }
+}
+
+function ApplyTweakSelection {
+    param([string[]]$selectedIds)
+    foreach($id in $selectedIds){
+        switch ($id) {
+            'DisableSearchIndexer' { $script:DisableSearchIndexer = $true }
+            'DisableAnyDesk'       { $script:DisableAnyDesk = $true }
+            'RemoveStoreBloat'     { $script:RemoveStoreBloat = $true }
+            'DisableAnimations'    { $script:DisableAnimations = $true }
+            'DisableToastNotifs'   { $script:DisableToastNotifs = $true }
+            'FastKillHungApps'     { $script:FastKillHungApps = $true }
+            'TunePowerOnAC'        { $script:TunePowerOnAC = $true }
+            'LimitDefenderCpu'     { $script:LimitDefenderCpu = $true }
+            'DisableHibernation'   { $script:DisableHibernation = $true }
+            'DefenderExclusions'   { $script:DefenderExclusions = $true }
+            'CheckInstallUtil'     { $script:CheckInstallUtil = $true }
+            'PickProgramsToUninstall' { $script:PickProgramsToUninstall = $true }
+            'InstallBrowsers'      { Show-SoftwareInstallerDialog }
+            'ManageStartupItems'   { Show-StartupManagerDialog }
+            'ManageServices'       { Show-ServiceManagerDialog }
+            'DisableWidgets'       { Write-Host '   Widgets/Chat cleanup selected.' -ForegroundColor Cyan }
+            'TuneStorage'          { Write-Host '   Temp cache cleanup selected.' -ForegroundColor Cyan }
+            'ResetExplorer'        { }
+            'TrimVolume'           { }
+            'FlushDNS'             { }
+        }
+    }
+}
+
+function Show-SoftwareInstallerDialog {
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+
+    $form = New-Object System.Windows.Forms.Form
+    $form.Text = 'Install useful programs'
+    $form.Size = New-Object System.Drawing.Size(760, 560)
+    $form.StartPosition = 'CenterScreen'
+    $form.FormBorderStyle = 'FixedDialog'
+    $form.BackColor = [System.Drawing.Color]::FromArgb(18, 18, 22)
+    $form.ForeColor = [System.Drawing.Color]::FromArgb(240, 240, 240)
+    $form.MaximizeBox = $false
+    $form.MinimizeBox = $false
+
+    $title = New-Object System.Windows.Forms.Label
+    $title.Text = 'Choose programs to install with winget'
+    $title.Font = New-Object System.Drawing.Font('Segoe UI', 16, [System.Drawing.FontStyle]::Bold)
+    $title.Location = New-Object System.Drawing.Point(20, 20)
+    $title.Size = New-Object System.Drawing.Size(520, 32)
+    $form.Controls.Add($title)
+
+    $checkedList = New-Object System.Windows.Forms.CheckedListBox
+    $checkedList.Location = New-Object System.Drawing.Point(20, 60)
+    $checkedList.Size = New-Object System.Drawing.Size(400, 360)
+    $checkedList.Font = New-Object System.Drawing.Font('Segoe UI', 11)
+    $checkedList.BackColor = [System.Drawing.Color]::FromArgb(35, 35, 40)
+    $checkedList.ForeColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
+    foreach($app in $script:SoftwareCatalog){
+        $checkedList.Items.Add($app.Name) | Out-Null
+    }
+    $form.Controls.Add($checkedList)
+
+    $desc = New-Object System.Windows.Forms.Label
+    $desc.Location = New-Object System.Drawing.Point(440, 60)
+    $desc.Size = New-Object System.Drawing.Size(280, 360)
+    $desc.Font = New-Object System.Drawing.Font('Segoe UI', 10)
+    $desc.BackColor = [System.Drawing.Color]::FromArgb(32, 32, 36)
+    $desc.BorderStyle = 'FixedSingle'
+    $desc.Padding = New-Object System.Windows.Forms.Padding(12)
+    $desc.Text = 'Select software to install. This uses winget, which must be available on the system.'
+    $form.Controls.Add($desc)
+
+    $checkedList.Add_SelectedIndexChanged({
+        $idx = $checkedList.SelectedIndex
+        if($idx -ge 0){
+            $desc.Text = $script:SoftwareCatalog[$idx].Description
+        }
+    })
+
+    $installBtn = New-Object System.Windows.Forms.Button
+    $installBtn.Text = 'Install selected'
+    $installBtn.Location = New-Object System.Drawing.Point(440, 450)
+    $installBtn.Size = New-Object System.Drawing.Size(140, 38)
+    $installBtn.BackColor = [System.Drawing.Color]::FromArgb(0, 140, 92)
+    $installBtn.ForeColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
+    $installBtn.DialogResult = [System.Windows.Forms.DialogResult]::OK
+    $form.Controls.Add($installBtn)
+
+    $cancel = New-Object System.Windows.Forms.Button
+    $cancel.Text = 'Close'
+    $cancel.Location = New-Object System.Drawing.Point(590, 450)
+    $cancel.Size = New-Object System.Drawing.Size(120, 38)
+    $cancel.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+    $cancel.BackColor = [System.Drawing.Color]::FromArgb(90, 90, 100)
+    $cancel.ForeColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
+    $form.Controls.Add($cancel)
+
+    $form.AcceptButton = $installBtn
+    $form.CancelButton = $cancel
+
+    $result = $form.ShowDialog()
+    if($result -ne [System.Windows.Forms.DialogResult]::OK){ return }
+
+    $selected = @()
+    for($i = 0; $i -lt $checkedList.Items.Count; $i++){
+        if($checkedList.GetItemChecked($i)){
+            $selected += $script:SoftwareCatalog[$i]
+        }
+    }
+
+    if(-not $selected){
+        Write-Host '   No software selected.' -ForegroundColor Yellow
+        return
+    }
+
+    if(-not (Get-Command winget -ErrorAction SilentlyContinue)){
+        Write-Host '   winget is not available on this machine. Install App Installer or use the Microsoft Store version of winget first.' -ForegroundColor Yellow
+        return
+    }
+
+    foreach($app in $selected){
+        Write-Host "   Installing: $($app.Name)" -ForegroundColor Cyan
+        try {
+            Invoke-Expression $app.InstallCmd
+        } catch {
+            Write-Host "   Failed to install $($app.Name): $($_.Exception.Message)" -ForegroundColor Red
+        }
+    }
+}
+
+function Get-StartupEntries {
+    $entries = @()
+    $paths = @(
+        'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run',
+        'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run',
+        'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run',
+        'HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
+    )
+
+    foreach($p in $paths){
+        if(Test-Path $p){
+            $props = Get-ItemProperty $p -ErrorAction SilentlyContinue
+            if($null -ne $props){
+                foreach($name in $props.PSObject.Properties.Name){
+                    if($name -notmatch 'PSPath|PSParentPath|PSChildName|PSProvider|^_'){ 
+                        $entries += [pscustomobject]@{ Name=$name; Value=$props.$name; Path=$p; Source='Registry' }
+                    }
+                }
+            }
+        }
+    }
+
+    return $entries | Sort-Object Name -Unique
+}
+
+function Show-StartupManagerDialog {
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+
+    $entries = Get-StartupEntries
+    if(-not $entries -or $entries.Count -eq 0){
+        [System.Windows.Forms.MessageBox]::Show('No startup entries were found.', 'Startup Manager', 'OK', 'Information') | Out-Null
+        return
+    }
+
+    $form = New-Object System.Windows.Forms.Form
+    $form.Text = 'Startup Manager'
+    $form.Size = New-Object System.Drawing.Size(780, 560)
+    $form.StartPosition = 'CenterScreen'
+    $form.FormBorderStyle = 'FixedDialog'
+    $form.BackColor = [System.Drawing.Color]::FromArgb(18, 18, 22)
+    $form.ForeColor = [System.Drawing.Color]::FromArgb(240, 240, 240)
+
+    $listBox = New-Object System.Windows.Forms.CheckedListBox
+    $listBox.Location = New-Object System.Drawing.Point(20, 60)
+    $listBox.Size = New-Object System.Drawing.Size(720, 360)
+    $listBox.Font = New-Object System.Drawing.Font('Segoe UI', 10)
+    $listBox.BackColor = [System.Drawing.Color]::FromArgb(35, 35, 40)
+    $listBox.ForeColor = [System.Drawing.Color]::FromArgb(250, 250, 250)
+    foreach($item in $entries){
+        $listBox.Items.Add("$($item.Name) :: $($item.Value)") | Out-Null
+    }
+    $form.Controls.Add($listBox)
+
+    $title = New-Object System.Windows.Forms.Label
+    $title.Text = 'Select startup items to disable'
+    $title.Font = New-Object System.Drawing.Font('Segoe UI', 16, [System.Drawing.FontStyle]::Bold)
+    $title.Location = New-Object System.Drawing.Point(20, 20)
+    $title.Size = New-Object System.Drawing.Size(400, 30)
+    $form.Controls.Add($title)
+
+    $apply = New-Object System.Windows.Forms.Button
+    $apply.Text = 'Disable selected'
+    $apply.Location = New-Object System.Drawing.Point(490, 450)
+    $apply.Size = New-Object System.Drawing.Size(160, 38)
+    $apply.BackColor = [System.Drawing.Color]::FromArgb(0, 140, 92)
+    $apply.ForeColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
+    $apply.DialogResult = [System.Windows.Forms.DialogResult]::OK
+    $form.Controls.Add($apply)
+
+    $close = New-Object System.Windows.Forms.Button
+    $close.Text = 'Close'
+    $close.Location = New-Object System.Drawing.Point(660, 450)
+    $close.Size = New-Object System.Drawing.Size(80, 38)
+    $close.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+    $close.BackColor = [System.Drawing.Color]::FromArgb(90, 90, 100)
+    $close.ForeColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
+    $form.Controls.Add($close)
+
+    $form.AcceptButton = $apply
+    $form.CancelButton = $close
+
+    $result = $form.ShowDialog()
+    if($result -ne [System.Windows.Forms.DialogResult]::OK){ return }
+
+    foreach($idx in $listBox.CheckedIndices){
+        $name = $entries[$idx].Name
+        $path = $entries[$idx].Path
+        if(Test-Path $path){
+            try {
+                Remove-ItemProperty -Path $path -Name $name -ErrorAction SilentlyContinue
+                Write-Host "   Disabled startup entry: $name" -ForegroundColor Green
+            } catch {
+                Write-Host "   Could not disable startup entry: $name" -ForegroundColor Yellow
+            }
+        }
+    }
+}
+
+function Show-ServiceManagerDialog {
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+
+    $services = @(
+        'SysMain','DiagTrack','dmwappushservice','Fax','WSearch','WMPNetworkSvc','MapsBroker',
+        'XblAuthManager','XblGameSave','XboxNetApiSvc','XboxGipSvc','RetailDemo','PhoneSvc','RemoteRegistry',
+        'WerSvc','Fax','Windows Mobile Hotspot Service'
+    )
+
+    $form = New-Object System.Windows.Forms.Form
+    $form.Text = 'Service Tuner'
+    $form.Size = New-Object System.Drawing.Size(750, 560)
+    $form.StartPosition = 'CenterScreen'
+    $form.FormBorderStyle = 'FixedDialog'
+    $form.BackColor = [System.Drawing.Color]::FromArgb(18, 18, 22)
+    $form.ForeColor = [System.Drawing.Color]::FromArgb(240, 240, 240)
+
+    $title = New-Object System.Windows.Forms.Label
+    $title.Text = 'Select services to tune'
+    $title.Font = New-Object System.Drawing.Font('Segoe UI', 16, [System.Drawing.FontStyle]::Bold)
+    $title.Location = New-Object System.Drawing.Point(20, 20)
+    $title.Size = New-Object System.Drawing.Size(360, 30)
+    $form.Controls.Add($title)
+
+    $list = New-Object System.Windows.Forms.CheckedListBox
+    $list.Location = New-Object System.Drawing.Point(20, 60)
+    $list.Size = New-Object System.Drawing.Size(700, 360)
+    $list.Font = New-Object System.Drawing.Font('Segoe UI', 11)
+    $list.BackColor = [System.Drawing.Color]::FromArgb(35, 35, 40)
+    $list.ForeColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
+    foreach($name in $services){
+        $list.Items.Add($name) | Out-Null
+    }
+    $form.Controls.Add($list)
+
+    $apply = New-Object System.Windows.Forms.Button
+    $apply.Text = 'Apply changes'
+    $apply.Location = New-Object System.Drawing.Point(470, 450)
+    $apply.Size = New-Object System.Drawing.Size(150, 38)
+    $apply.BackColor = [System.Drawing.Color]::FromArgb(0, 140, 92)
+    $apply.ForeColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
+    $apply.DialogResult = [System.Windows.Forms.DialogResult]::OK
+    $form.Controls.Add($apply)
+
+    $close = New-Object System.Windows.Forms.Button
+    $close.Text = 'Close'
+    $close.Location = New-Object System.Drawing.Point(630, 450)
+    $close.Size = New-Object System.Drawing.Size(90, 38)
+    $close.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+    $close.BackColor = [System.Drawing.Color]::FromArgb(90, 90, 100)
+    $close.ForeColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
+    $form.Controls.Add($close)
+
+    $form.AcceptButton = $apply
+    $form.CancelButton = $close
+
+    $result = $form.ShowDialog()
+    if($result -ne [System.Windows.Forms.DialogResult]::OK){ return }
+
+    foreach($idx in $list.CheckedIndices){
+        $svcName = $services[$idx]
+        $svc = Get-Service -Name $svcName -ErrorAction SilentlyContinue
+        if($null -ne $svc){
+            try {
+                Stop-Service $svcName -Force -ErrorAction SilentlyContinue
+                Set-Service $svcName -StartupType Manual -ErrorAction SilentlyContinue
+                Write-Host "   Service set to Manual: $svcName" -ForegroundColor Green
+            } catch {
+                Write-Host "   Could not change service: $svcName" -ForegroundColor Yellow
+            }
+        }
+    }
+}
+
+function Show-AdvancedChooser {
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+
+    $form = New-Object System.Windows.Forms.Form
+    $form.Text = 'Advanced Windows Optimizer'
+    $form.Size = New-Object System.Drawing.Size(1100, 700)
+    $form.StartPosition = 'CenterScreen'
+    $form.FormBorderStyle = 'FixedDialog'
+    $form.BackColor = [System.Drawing.Color]::FromArgb(18, 18, 22)
+    $form.ForeColor = [System.Drawing.Color]::FromArgb(240, 240, 240)
+    $form.MaximizeBox = $false
+    $form.MinimizeBox = $false
+
+    $title = New-Object System.Windows.Forms.Label
+    $title.Text = 'Choose the tweaks you want to apply'
+    $title.Font = New-Object System.Drawing.Font('Segoe UI', 18, [System.Drawing.FontStyle]::Bold)
+    $title.Location = New-Object System.Drawing.Point(20, 18)
+    $title.Size = New-Object System.Drawing.Size(500, 34)
+    $form.Controls.Add($title)
+
+    $listBox = New-Object System.Windows.Forms.ListBox
+    $listBox.Location = New-Object System.Drawing.Point(20, 70)
+    $listBox.Size = New-Object System.Drawing.Size(360, 430)
+    $listBox.Font = New-Object System.Drawing.Font('Segoe UI', 11)
+    $listBox.BackColor = [System.Drawing.Color]::FromArgb(35, 35, 40)
+    $listBox.ForeColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
+    foreach($item in $script:TweakCatalog){
+        $listBox.Items.Add($item.Title) | Out-Null
+    }
+    $form.Controls.Add($listBox)
+
+    $info = New-Object System.Windows.Forms.GroupBox
+    $info.Text = 'What this tweak does'
+    $info.Location = New-Object System.Drawing.Point(410, 70)
+    $info.Size = New-Object System.Drawing.Size(660, 300)
+    $info.BackColor = [System.Drawing.Color]::FromArgb(28, 28, 32)
+    $info.ForeColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
+    $form.Controls.Add($info)
+
+    $infoText = New-Object System.Windows.Forms.Label
+    $infoText.Location = New-Object System.Drawing.Point(15, 25)
+    $infoText.Size = New-Object System.Drawing.Size(620, 260)
+    $infoText.Font = New-Object System.Drawing.Font('Segoe UI', 11)
+    $infoText.AutoSize = $false
+    $infoText.BackColor = [System.Drawing.Color]::FromArgb(28, 28, 32)
+    $infoText.ForeColor = [System.Drawing.Color]::FromArgb(240, 240, 240)
+    $infoText.Text = 'Select an item from the list to see the full description and risk level.'
+    $info.Controls.Add($infoText)
+
+    $checkAll = New-Object System.Windows.Forms.Button
+    $checkAll.Text = 'Select all'
+    $checkAll.Location = New-Object System.Drawing.Point(20, 520)
+    $checkAll.Size = New-Object System.Drawing.Size(120, 38)
+    $checkAll.BackColor = [System.Drawing.Color]::FromArgb(70, 90, 130)
+    $checkAll.ForeColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
+    $form.Controls.Add($checkAll)
+
+    $clearAll = New-Object System.Windows.Forms.Button
+    $clearAll.Text = 'Clear all'
+    $clearAll.Location = New-Object System.Drawing.Point(150, 520)
+    $clearAll.Size = New-Object System.Drawing.Size(120, 38)
+    $clearAll.BackColor = [System.Drawing.Color]::FromArgb(70, 70, 75)
+    $clearAll.ForeColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
+    $form.Controls.Add($clearAll)
+
+    $ok = New-Object System.Windows.Forms.Button
+    $ok.Text = 'Apply'
+    $ok.Location = New-Object System.Drawing.Point(900, 520)
+    $ok.Size = New-Object System.Drawing.Size(120, 38)
+    $ok.DialogResult = [System.Windows.Forms.DialogResult]::OK
+    $ok.BackColor = [System.Drawing.Color]::FromArgb(0, 160, 100)
+    $ok.ForeColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
+    $form.Controls.Add($ok)
+
+    $cancel = New-Object System.Windows.Forms.Button
+    $cancel.Text = 'Cancel'
+    $cancel.Location = New-Object System.Drawing.Point(1028, 520)
+    $cancel.Size = New-Object System.Drawing.Size(120, 38)
+    $cancel.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+    $cancel.BackColor = [System.Drawing.Color]::FromArgb(80, 80, 90)
+    $cancel.ForeColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
+    $form.Controls.Add($cancel)
+
+    $listBox.Add_SelectedIndexChanged({
+        $idx = $listBox.SelectedIndex
+        if($idx -ge 0){
+            $item = $script:TweakCatalog[$idx]
+            $infoText.Text = "Title: $($item.Title)`nCategory: $($item.Category)`nRisk: $($item.Risk)`n`nDescription:`n$item.Description"
+        }
+    })
+
+    $checkAll.Add_Click({
+        for($i = 0; $i -lt $listBox.Items.Count; $i++){
+            $listBox.SetSelected($i, $true)
+        }
+    })
+
+    $clearAll.Add_Click({
+        $listBox.ClearSelected()
+        $infoText.Text = 'Select an item from the list to see the full description and risk level.'
+    })
+
+    $form.AcceptButton = $ok
+    $form.CancelButton = $cancel
+
+    $result = $form.ShowDialog()
+    if($result -ne [System.Windows.Forms.DialogResult]::OK){
+        return @()
+    }
+
+    $selected = @()
+    foreach($idx in $listBox.SelectedIndices){
+        $selected += $script:TweakCatalog[$idx].Id
+    }
+    return $selected
+}
+
+function Show-PresetChooser {
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+
+    $presetList = @(
+        [pscustomobject]@{ Name='Safe'; Description='Minimal changes - best for stability and daily use' },
+        [pscustomobject]@{ Name='Balanced'; Description='Recommended default - good balance of speed and stability' },
+        [pscustomobject]@{ Name='Aggressive'; Description='More performance tweaks and more system changes' },
+        [pscustomobject]@{ Name='Custom'; Description='Select custom tweaks manually' }
+    )
+
+    $form = New-Object System.Windows.Forms.Form
+    $form.Text = 'Optimization presets'
+    $form.Size = New-Object System.Drawing.Size(640, 420)
+    $form.StartPosition = 'CenterScreen'
+    $form.BackColor = [System.Drawing.Color]::FromArgb(18, 18, 22)
+    $form.ForeColor = [System.Drawing.Color]::FromArgb(240, 240, 240)
+    $form.FormBorderStyle = 'FixedDialog'
+    $form.MaximizeBox = $false
+    $form.MinimizeBox = $false
+
+    $title = New-Object System.Windows.Forms.Label
+    $title.Text = 'Choose a preset:'
+    $title.Font = New-Object System.Drawing.Font('Segoe UI', 16, [System.Drawing.FontStyle]::Bold)
+    $title.Location = New-Object System.Drawing.Point(20, 20)
+    $title.Size = New-Object System.Drawing.Size(300, 32)
+    $form.Controls.Add($title)
+
+    $list = New-Object System.Windows.Forms.ListBox
+    $list.Location = New-Object System.Drawing.Point(20, 60)
+    $list.Size = New-Object System.Drawing.Size(250, 220)
+    $list.Font = New-Object System.Drawing.Font('Segoe UI', 11)
+    foreach($p in $presetList){
+        $list.Items.Add($p.Name) | Out-Null
+    }
+    $list.SelectedIndex = 1
+    $form.Controls.Add($list)
+
+    $desc = New-Object System.Windows.Forms.Label
+    $desc.Location = New-Object System.Drawing.Point(290, 60)
+    $desc.Size = New-Object System.Drawing.Size(300, 220)
+    $desc.Text = $presetList[1].Description
+    $desc.BorderStyle = 'FixedSingle'
+    $desc.BackColor = [System.Drawing.Color]::FromArgb(32, 32, 36)
+    $desc.ForeColor = [System.Drawing.Color]::FromArgb(240, 240, 240)
+    $desc.Padding = New-Object System.Windows.Forms.Padding(12)
+    $form.Controls.Add($desc)
+
+    $list.Add_SelectedIndexChanged({
+        $idx = $list.SelectedIndex
+        if($idx -ge 0){ $desc.Text = $presetList[$idx].Description }
+    })
+
+    $ok = New-Object System.Windows.Forms.Button
+    $ok.Text = 'OK'
+    $ok.Location = New-Object System.Drawing.Point(400, 300)
+    $ok.Size = New-Object System.Drawing.Size(100, 38)
+    $ok.DialogResult = [System.Windows.Forms.DialogResult]::OK
+    $form.Controls.Add($ok)
+
+    $cancel = New-Object System.Windows.Forms.Button
+    $cancel.Text = 'Cancel'
+    $cancel.Location = New-Object System.Drawing.Point(510, 300)
+    $cancel.Size = New-Object System.Drawing.Size(100, 38)
+    $cancel.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+    $form.Controls.Add($cancel)
+
+    $form.AcceptButton = $ok
+    $form.CancelButton = $cancel
+
+    $result = $form.ShowDialog()
+    if($result -ne [System.Windows.Forms.DialogResult]::OK){
+        return $null
+    }
+    return $presetList[$list.SelectedIndex].Name
+}
+
+function Show-AdvancedOptimizerDialog {
+    $preset = Show-PresetChooser
+    if($null -eq $preset){
+        return
+    }
+
+    Set-OptimizationPreset -Name $preset
+
+    if($preset -eq 'Custom'){
+        $selected = Show-AdvancedChooser
+        if($selected.Count -gt 0){
+            ApplyTweakSelection -selectedIds $selected
+        }
+    }
+}
+
 function Set-OptimizationPreset {
     param(
         [Parameter(Mandatory = $true)]
