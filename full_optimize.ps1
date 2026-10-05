@@ -95,46 +95,194 @@ function Set-OptimizationPreset {
 }
 
 function Show-OptimizationChooser {
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+
     $presets = @(
-        [pscustomobject]@{ Name='Safe'; Description='Least aggressive - safer for daily use' },
-        [pscustomobject]@{ Name='Balanced'; Description='Recommended default - good balance' },
-        [pscustomobject]@{ Name='Aggressive'; Description='More performance tweaks' },
+        [pscustomobject]@{ Name='Safe'; Description='Low-risk profile for daily use' },
+        [pscustomobject]@{ Name='Balanced'; Description='Recommended default with a good balance of speed and stability' },
+        [pscustomobject]@{ Name='Aggressive'; Description='More performance tweaks and more aggressive cleanup' },
         [pscustomobject]@{ Name='Custom'; Description='Use the settings already written at the top of the script' }
     )
 
-    $picked = $presets | Select-Object Name,Description | Out-GridView -Title 'Choose optimization preset' -PassThru
-    if(-not $picked){
-        Write-Host 'No preset selected; using the current script values.' -ForegroundColor Yellow
-        return
+    $form = New-Object System.Windows.Forms.Form
+    $form.Text = 'Optimization Selector'
+    $form.Size = New-Object System.Drawing.Size(700, 480)
+    $form.StartPosition = 'CenterScreen'
+    $form.FormBorderStyle = 'FixedDialog'
+    $form.BackColor = [System.Drawing.Color]::FromArgb(24, 24, 28)
+    $form.ForeColor = [System.Drawing.Color]::FromArgb(240, 240, 240)
+    $form.MaximizeBox = $false
+    $form.MinimizeBox = $false
+
+    $title = New-Object System.Windows.Forms.Label
+    $title.Text = 'Choose your optimization profile:'
+    $title.Font = New-Object System.Drawing.Font('Segoe UI', 14, [System.Drawing.FontStyle]::Bold)
+    $title.Location = New-Object System.Drawing.Point(20, 20)
+    $title.Size = New-Object System.Drawing.Size(380, 30)
+    $title.ForeColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
+    $form.Controls.Add($title)
+
+    $listBox = New-Object System.Windows.Forms.ListBox
+    $listBox.Location = New-Object System.Drawing.Point(20, 60)
+    $listBox.Size = New-Object System.Drawing.Size(300, 220)
+    $listBox.BackColor = [System.Drawing.Color]::FromArgb(34, 34, 38)
+    $listBox.ForeColor = [System.Drawing.Color]::FromArgb(240, 240, 240)
+    $listBox.BorderStyle = 'FixedSingle'
+    $listBox.Font = New-Object System.Drawing.Font('Segoe UI', 11)
+    foreach($item in $presets){
+        $listBox.Items.Add($item.Name) | Out-Null
+    }
+    $listBox.SelectedIndex = 1
+    $form.Controls.Add($listBox)
+
+    $desc = New-Object System.Windows.Forms.Label
+    $desc.Location = New-Object System.Drawing.Point(340, 60)
+    $desc.Size = New-Object System.Drawing.Size(320, 200)
+    $desc.BackColor = [System.Drawing.Color]::FromArgb(40, 40, 46)
+    $desc.BorderStyle = 'FixedSingle'
+    $desc.Padding = New-Object System.Windows.Forms.Padding(12)
+    $desc.Font = New-Object System.Drawing.Font('Segoe UI', 11)
+    $desc.ForeColor = [System.Drawing.Color]::FromArgb(230, 230, 230)
+    $desc.Text = $presets[1].Description
+    $form.Controls.Add($desc)
+
+    $listBox.Add_SelectedIndexChanged({
+        $sel = $presets | Where-Object { $_.Name -eq $listBox.SelectedItem }
+        if($sel){
+            $desc.Text = $sel.Description
+        }
+    })
+
+    $ok = New-Object System.Windows.Forms.Button
+    $ok.Text = 'OK'
+    $ok.Location = New-Object System.Drawing.Point(420, 290)
+    $ok.Size = New-Object System.Drawing.Size(110, 40)
+    $ok.BackColor = [System.Drawing.Color]::FromArgb(0, 153, 102)
+    $ok.ForeColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
+    $ok.DialogResult = [System.Windows.Forms.DialogResult]::OK
+    $form.Controls.Add($ok)
+
+    $cancel = New-Object System.Windows.Forms.Button
+    $cancel.Text = 'Cancel'
+    $cancel.Location = New-Object System.Drawing.Point(540, 290)
+    $cancel.Size = New-Object System.Drawing.Size(110, 40)
+    $cancel.BackColor = [System.Drawing.Color]::FromArgb(75, 75, 80)
+    $cancel.ForeColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
+    $cancel.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+    $form.Controls.Add($cancel)
+
+    $form.AcceptButton = $ok
+    $form.CancelButton = $cancel
+
+    $result = $form.ShowDialog()
+    if($result -eq [System.Windows.Forms.DialogResult]::OK){
+        return $listBox.SelectedItem
     }
 
-    return $picked.Name
+    return $null
 }
 
 function Show-CustomTweakChooser {
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+
     $tweaks = @(
-        [pscustomobject]@{ Name='DisableSearchIndexer'; Description='Disable Windows Search indexing' },
-        [pscustomobject]@{ Name='DisableAnyDesk'; Description='Set AnyDesk to Manual' },
-        [pscustomobject]@{ Name='RemoveStoreBloat'; Description='Remove Store bloat apps' },
-        [pscustomobject]@{ Name='DisableAnimations'; Description='Disable animations and transparency' },
-        [pscustomobject]@{ Name='DisableToastNotifs'; Description='Disable pop-up notifications' },
-        [pscustomobject]@{ Name='FastKillHungApps'; Description='Kill hung apps faster' },
-        [pscustomobject]@{ Name='TunePowerOnAC'; Description='Tune AC power profile for performance' },
-        [pscustomobject]@{ Name='LimitDefenderCpu'; Description='Limit Defender CPU usage' },
-        [pscustomobject]@{ Name='DisableHibernation'; Description='Turn off hibernation' },
-        [pscustomobject]@{ Name='DefenderExclusions'; Description='Add Minecraft/LunarClient exclusions' },
-        [pscustomobject]@{ Name='CheckInstallUtil'; Description='Check InstallUtil.exe activity' },
-        [pscustomobject]@{ Name='PickProgramsToUninstall'; Description='Show uninstall picker at the end' }
+        [pscustomobject]@{ Name='DisableSearchIndexer'; Label='Disable Search Indexer'; Description='Turns off Windows Search indexing' },
+        [pscustomobject]@{ Name='DisableAnyDesk'; Label='Disable AnyDesk'; Description='Sets AnyDesk service to Manual' },
+        [pscustomobject]@{ Name='RemoveStoreBloat'; Label='Remove Store bloat'; Description='Removes unnecessary Store apps' },
+        [pscustomobject]@{ Name='DisableAnimations'; Label='Disable animations'; Description='Speeds up the UI and removes motion' },
+        [pscustomobject]@{ Name='DisableToastNotifs'; Label='Disable popups'; Description='Turns off toast notifications' },
+        [pscustomobject]@{ Name='FastKillHungApps'; Label='Kill hung apps faster'; Description='Can close apps without warning' },
+        [pscustomobject]@{ Name='TunePowerOnAC'; Label='Tune power for performance'; Description='Better performance while plugged in' },
+        [pscustomobject]@{ Name='LimitDefenderCpu'; Label='Reduce Defender CPU'; Description='Keeps security on while limiting scan load' },
+        [pscustomobject]@{ Name='DisableHibernation'; Label='Turn off hibernation'; Description='Frees disk space' },
+        [pscustomobject]@{ Name='DefenderExclusions'; Label='Add game exclusions'; Description='Adds .minecraft/.lunarclient exclusions' },
+        [pscustomobject]@{ Name='CheckInstallUtil'; Label='Check InstallUtil'; Description='Writes a report for InstallUtil.exe' },
+        [pscustomobject]@{ Name='PickProgramsToUninstall'; Label='Pick uninstall list'; Description='Lets you choose extra apps to remove' }
     )
 
-    $selected = $tweaks | Select-Object Name,Description | Out-GridView -Title 'Choose individual tweaks' -OutputMode Multiple
-    if(-not $selected){
-        Write-Host 'No custom tweaks selected; leaving current values unchanged.' -ForegroundColor Yellow
+    $form = New-Object System.Windows.Forms.Form
+    $form.Text = 'Custom tweaks'
+    $form.Size = New-Object System.Drawing.Size(760, 520)
+    $form.StartPosition = 'CenterScreen'
+    $form.BackColor = [System.Drawing.Color]::FromArgb(24, 24, 28)
+    $form.ForeColor = [System.Drawing.Color]::FromArgb(240, 240, 240)
+    $form.FormBorderStyle = 'FixedDialog'
+    $form.MaximizeBox = $false
+    $form.MinimizeBox = $false
+
+    $title = New-Object System.Windows.Forms.Label
+    $title.Text = 'Choose the tweaks you want:'
+    $title.Font = New-Object System.Drawing.Font('Segoe UI', 14, [System.Drawing.FontStyle]::Bold)
+    $title.Location = New-Object System.Drawing.Point(20, 20)
+    $title.Size = New-Object System.Drawing.Size(420, 30)
+    $form.Controls.Add($title)
+
+    $checkedList = New-Object System.Windows.Forms.CheckedListBox
+    $checkedList.Location = New-Object System.Drawing.Point(20, 60)
+    $checkedList.Size = New-Object System.Drawing.Size(380, 320)
+    $checkedList.BackColor = [System.Drawing.Color]::FromArgb(34, 34, 38)
+    $checkedList.ForeColor = [System.Drawing.Color]::FromArgb(240, 240, 240)
+    $checkedList.Font = New-Object System.Drawing.Font('Segoe UI', 11)
+    foreach($item in $tweaks){
+        $checkedList.Items.Add($item.Label) | Out-Null
+    }
+    $form.Controls.Add($checkedList)
+
+    $desc = New-Object System.Windows.Forms.Label
+    $desc.Location = New-Object System.Drawing.Point(420, 60)
+    $desc.Size = New-Object System.Drawing.Size(300, 320)
+    $desc.BackColor = [System.Drawing.Color]::FromArgb(40, 40, 46)
+    $desc.BorderStyle = 'FixedSingle'
+    $desc.Font = New-Object System.Drawing.Font('Segoe UI', 11)
+    $desc.ForeColor = [System.Drawing.Color]::FromArgb(230, 230, 230)
+    $desc.Padding = New-Object System.Windows.Forms.Padding(12)
+    $desc.Text = 'Select something from the left list. Each item explains what it does.'
+    $form.Controls.Add($desc)
+
+    $checkedList.Add_SelectedIndexChanged({
+        $idx = $checkedList.SelectedIndex
+        if($idx -ge 0){
+            $desc.Text = $tweaks[$idx].Description
+        }
+    })
+
+    $ok = New-Object System.Windows.Forms.Button
+    $ok.Text = 'Apply'
+    $ok.Location = New-Object System.Drawing.Point(470, 410)
+    $ok.Size = New-Object System.Drawing.Size(130, 40)
+    $ok.DialogResult = [System.Windows.Forms.DialogResult]::OK
+    $ok.BackColor = [System.Drawing.Color]::FromArgb(0, 153, 102)
+    $ok.ForeColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
+    $form.Controls.Add($ok)
+
+    $cancel = New-Object System.Windows.Forms.Button
+    $cancel.Text = 'Cancel'
+    $cancel.Location = New-Object System.Drawing.Point(610, 410)
+    $cancel.Size = New-Object System.Drawing.Size(110, 40)
+    $cancel.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+    $cancel.BackColor = [System.Drawing.Color]::FromArgb(75, 75, 80)
+    $cancel.ForeColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
+    $form.Controls.Add($cancel)
+
+    $form.AcceptButton = $ok
+    $form.CancelButton = $cancel
+
+    $result = $form.ShowDialog()
+    if($result -ne [System.Windows.Forms.DialogResult]::OK){
         return
     }
 
-    foreach($item in $selected){
-        switch($item.Name){
+    $selected = @()
+    for($i = 0; $i -lt $checkedList.Items.Count; $i++){
+        if($checkedList.GetItemChecked($i)){
+            $selected += $tweaks[$i].Name
+        }
+    }
+
+    foreach($name in $selected){
+        switch($name){
             'DisableSearchIndexer' { $script:DisableSearchIndexer = $true }
             'DisableAnyDesk' { $script:DisableAnyDesk = $true }
             'RemoveStoreBloat' { $script:RemoveStoreBloat = $true }
@@ -149,8 +297,6 @@ function Show-CustomTweakChooser {
             'PickProgramsToUninstall' { $script:PickProgramsToUninstall = $true }
         }
     }
-
-    Write-Host 'Custom tweaks applied.' -ForegroundColor Green
 }
 
 switch ($OptimizationProfile) {
@@ -191,14 +337,14 @@ switch ($OptimizationProfile) {
     }
 }
 
-if($EnableInteractiveChoose -and (Get-Command Out-GridView -ErrorAction SilentlyContinue)){
+if($EnableInteractiveChoose){
     Write-Host "Opening optimization selector..." -ForegroundColor Cyan
     $selectedPreset = Show-OptimizationChooser
     if($selectedPreset){
         Set-OptimizationPreset -Name $selectedPreset
     }
 
-    $answer = Read-Host "Do you want to choose extra custom tweaks manually? (Y/N)"
+    $answer = Read-Host "هل تريد اختيار تعديلات إضافية يدوياً؟ (Y/N)"
     if($answer -match '^[Yy]'){
         Show-CustomTweakChooser
     }
