@@ -10,6 +10,7 @@
 
 # ============================ SETTINGS (edit if you want) ============================
 $OptimizationProfile     = 'Balanced'  # Safe / Balanced / Aggressive
+$EnableInteractiveChoose = $true       # If true, a window opens before running to let you choose a preset or custom tweaks.
 $DisableSearchIndexer    = $false   # $true = stop Windows Search indexing (Start-menu search gets slower; fine if you use "Everything")
 $DisableAnyDesk          = $false   # $true = AnyDesk service -> Manual (you can still start it by hand)
 $RemoveStoreBloat        = $true    # Clipchamp, Solitaire, Teams, Bing apps, Phone Link, Copilot...
@@ -31,6 +32,126 @@ $KillStartup = @('*Driver*Booster*','*IObit*','*Discord*','*Spotify*','*Telegram
 $ProtectedServices = @('W32Time','Dhcp','Dnscache','MpsSvc','WinDefender','SecurityHealthService','wuauserv','UsoSvc','BITS')
 $ProtectedApps = @('Microsoft.WindowsStore','Microsoft.WindowsCalculator','Microsoft.Windows.Photos','Microsoft.XboxApp')
 # =====================================================================================
+
+function Set-OptimizationPreset {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name
+    )
+
+    switch ($Name) {
+        'Safe' {
+            $script:OptimizationProfile = 'Safe'
+            $script:DisableSearchIndexer = $false
+            $script:DisableAnyDesk = $false
+            $script:RemoveStoreBloat = $false
+            $script:DisableAnimations = $false
+            $script:DisableToastNotifs = $false
+            $script:FastKillHungApps = $false
+            $script:TunePowerOnAC = $false
+            $script:LimitDefenderCpu = $true
+            $script:DisableHibernation = $false
+            $script:DefenderExclusions = $false
+            $script:CheckInstallUtil = $true
+            $script:PickProgramsToUninstall = $false
+        }
+        'Balanced' {
+            $script:OptimizationProfile = 'Balanced'
+            $script:DisableSearchIndexer = $false
+            $script:DisableAnyDesk = $false
+            $script:RemoveStoreBloat = $true
+            $script:DisableAnimations = $true
+            $script:DisableToastNotifs = $false
+            $script:FastKillHungApps = $false
+            $script:TunePowerOnAC = $true
+            $script:LimitDefenderCpu = $true
+            $script:DisableHibernation = $false
+            $script:DefenderExclusions = $false
+            $script:CheckInstallUtil = $true
+            $script:PickProgramsToUninstall = $true
+        }
+        'Aggressive' {
+            $script:OptimizationProfile = 'Aggressive'
+            $script:DisableSearchIndexer = $true
+            $script:DisableAnyDesk = $true
+            $script:RemoveStoreBloat = $true
+            $script:DisableAnimations = $true
+            $script:DisableToastNotifs = $false
+            $script:FastKillHungApps = $false
+            $script:TunePowerOnAC = $true
+            $script:LimitDefenderCpu = $true
+            $script:DisableHibernation = $false
+            $script:DefenderExclusions = $false
+            $script:CheckInstallUtil = $true
+            $script:PickProgramsToUninstall = $true
+        }
+        'Custom' {
+            Write-Host 'Using current custom settings from the top of the file.' -ForegroundColor Cyan
+        }
+        default {
+            Write-Host "Unknown preset '$Name'; keeping the current values." -ForegroundColor Yellow
+        }
+    }
+}
+
+function Show-OptimizationChooser {
+    $presets = @(
+        [pscustomobject]@{ Name='Safe'; Description='Least aggressive - safer for daily use' },
+        [pscustomobject]@{ Name='Balanced'; Description='Recommended default - good balance' },
+        [pscustomobject]@{ Name='Aggressive'; Description='More performance tweaks' },
+        [pscustomobject]@{ Name='Custom'; Description='Use the settings already written at the top of the script' }
+    )
+
+    $picked = $presets | Select-Object Name,Description | Out-GridView -Title 'Choose optimization preset' -PassThru
+    if(-not $picked){
+        Write-Host 'No preset selected; using the current script values.' -ForegroundColor Yellow
+        return
+    }
+
+    return $picked.Name
+}
+
+function Show-CustomTweakChooser {
+    $tweaks = @(
+        [pscustomobject]@{ Name='DisableSearchIndexer'; Description='Disable Windows Search indexing' },
+        [pscustomobject]@{ Name='DisableAnyDesk'; Description='Set AnyDesk to Manual' },
+        [pscustomobject]@{ Name='RemoveStoreBloat'; Description='Remove Store bloat apps' },
+        [pscustomobject]@{ Name='DisableAnimations'; Description='Disable animations and transparency' },
+        [pscustomobject]@{ Name='DisableToastNotifs'; Description='Disable pop-up notifications' },
+        [pscustomobject]@{ Name='FastKillHungApps'; Description='Kill hung apps faster' },
+        [pscustomobject]@{ Name='TunePowerOnAC'; Description='Tune AC power profile for performance' },
+        [pscustomobject]@{ Name='LimitDefenderCpu'; Description='Limit Defender CPU usage' },
+        [pscustomobject]@{ Name='DisableHibernation'; Description='Turn off hibernation' },
+        [pscustomobject]@{ Name='DefenderExclusions'; Description='Add Minecraft/LunarClient exclusions' },
+        [pscustomobject]@{ Name='CheckInstallUtil'; Description='Check InstallUtil.exe activity' },
+        [pscustomobject]@{ Name='PickProgramsToUninstall'; Description='Show uninstall picker at the end' }
+    )
+
+    $selected = $tweaks | Select-Object Name,Description | Out-GridView -Title 'Choose individual tweaks' -OutputMode Multiple
+    if(-not $selected){
+        Write-Host 'No custom tweaks selected; leaving current values unchanged.' -ForegroundColor Yellow
+        return
+    }
+
+    foreach($item in $selected){
+        switch($item.Name){
+            'DisableSearchIndexer' { $script:DisableSearchIndexer = $true }
+            'DisableAnyDesk' { $script:DisableAnyDesk = $true }
+            'RemoveStoreBloat' { $script:RemoveStoreBloat = $true }
+            'DisableAnimations' { $script:DisableAnimations = $true }
+            'DisableToastNotifs' { $script:DisableToastNotifs = $true }
+            'FastKillHungApps' { $script:FastKillHungApps = $true }
+            'TunePowerOnAC' { $script:TunePowerOnAC = $true }
+            'LimitDefenderCpu' { $script:LimitDefenderCpu = $true }
+            'DisableHibernation' { $script:DisableHibernation = $true }
+            'DefenderExclusions' { $script:DefenderExclusions = $true }
+            'CheckInstallUtil' { $script:CheckInstallUtil = $true }
+            'PickProgramsToUninstall' { $script:PickProgramsToUninstall = $true }
+        }
+    }
+
+    Write-Host 'Custom tweaks applied.' -ForegroundColor Green
+}
 
 switch ($OptimizationProfile) {
     'Safe' {
@@ -67,6 +188,19 @@ switch ($OptimizationProfile) {
     default {
         Write-Host "Unknown optimization profile '$OptimizationProfile'. Valid values: Safe, Balanced, Aggressive" -ForegroundColor Red
         return
+    }
+}
+
+if($EnableInteractiveChoose -and (Get-Command Out-GridView -ErrorAction SilentlyContinue)){
+    Write-Host "Opening optimization selector..." -ForegroundColor Cyan
+    $selectedPreset = Show-OptimizationChooser
+    if($selectedPreset){
+        Set-OptimizationPreset -Name $selectedPreset
+    }
+
+    $answer = Read-Host "Do you want to choose extra custom tweaks manually? (Y/N)"
+    if($answer -match '^[Yy]'){
+        Show-CustomTweakChooser
     }
 }
 
