@@ -13,7 +13,14 @@
 
 ## التشغيل
 
-افتح Windows PowerShell كمسؤول من مجلد المشروع، ثم شغّل:
+بعد تنزيل ZIP وفك ضغطه، افتح Windows PowerShell كمسؤول وانتقل إلى مجلد المشروع المستخرج. عند استخدام موقع التنزيل الافتراضي سيكون المسار غالبًا:
+
+```powershell
+Set-Location "$HOME\Downloads\mytweak-main"
+Test-Path .\full_optimize.ps1
+```
+
+يجب أن يعرض الأمر `Test-Path` القيمة `True`. إذا فككت الضغط في مكان آخر، استبدل المسار أعلاه بمسار مجلد `mytweak-main` لديك. بعد ذلك شغّل:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
