@@ -1,6 +1,8 @@
-#Requires -RunAsAdministrator
+﻿#Requires -RunAsAdministrator
 param(
-    [string]$LaunchProfile = ''
+    [string]$LaunchProfile = '',
+    [ValidateSet('Optimize','Downloads','AdvancedTweaks')]
+    [string]$LaunchMode = 'Optimize'
 )
 
 if ([string]::IsNullOrWhiteSpace($PSCommandPath)) {
@@ -57,10 +59,15 @@ $DisableHibernation      = $false   # frees disk space (= size of RAM); keep $fa
 $DefenderExclusions      = $false   # exclude .minecraft/.lunarclient from scans (only if you trust your mods)
 $CheckInstallUtil        = $true    # report on InstallUtil.exe if it is running
 $PickProgramsToUninstall = $false   # at the END: a window opens, you choose programs to uninstall
+$currentGpuScheduling = (Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' -Name 'HwSchMode' -ErrorAction SilentlyContinue).HwSchMode
+$currentPowerThrottling = (Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling' -Name 'PowerThrottlingOff' -ErrorAction SilentlyContinue).PowerThrottlingOff
+$EnableHardwareGpuScheduling = $currentGpuScheduling -eq 2 # requires a supported GPU and driver; restart required
+$DisablePowerThrottling = $currentPowerThrottling -eq 1 # may increase heat and battery use
 if($LaunchProfile -in @('Safe','Balanced','Aggressive')){
     $OptimizationProfile = $LaunchProfile
     $EnableInteractiveChoose = $false
 }
+if($LaunchMode -in @('Downloads','AdvancedTweaks')){ $EnableInteractiveChoose = $false }
 # Startup entries to disable (wildcards matched against Run-key names). Add/remove as you like.
 # Antivirus products (Avast, AVG...) are NOT in this list on purpose.
 $KillStartup = @('*Driver*Booster*','*IObit*','*Discord*','*Spotify*','*Telegram*','*Steam*','*Teams*',
@@ -81,6 +88,8 @@ $script:TweakCatalog = @(
     [pscustomobject]@{ Id='FastKillHungApps'; Title='Kill hung apps faster'; Category='Performance'; Risk='Medium'; Description='Changes timeout values so apps that stop responding are torn down faster. Unsaved work can be lost.'; Enabled=$false },
     [pscustomobject]@{ Id='TunePowerOnAC'; Title='Tune power plan for performance'; Category='Power'; Risk='Low'; Description='Applies AC power values for higher CPU boost, cooling priority, and less USB/PCIe sleep.'; Enabled=$true },
     [pscustomobject]@{ Id='LimitDefenderCpu'; Title='Limit Defender CPU usage'; Category='Security'; Risk='Low'; Description='Sets Defender scans to use less CPU while keeping protection enabled.'; Enabled=$true },
+    [pscustomobject]@{ Id='EnableHardwareGpuScheduling'; Title='Enable GPU scheduling'; Category='Gaming'; Risk='Medium'; Description='Enables hardware-accelerated GPU scheduling when the GPU and driver support it; requires a restart.'; Enabled=$false },
+    [pscustomobject]@{ Id='DisablePowerThrottling'; Title='Disable power throttling'; Category='Performance'; Risk='Medium'; Description='Reduces Windows background-app power limits; may increase heat and battery use.'; Enabled=$false },
     [pscustomobject]@{ Id='DisableHibernation'; Title='Disable hibernation'; Category='Storage'; Risk='Low'; Description='Turns off hibernation to free disk space equal to RAM size.'; Enabled=$false },
     [pscustomobject]@{ Id='DefenderExclusions'; Title='Game exclusions'; Category='Security'; Risk='Low'; Description='Adds exclusions for .minecraft and .lunarclient if you trust the mod directories.'; Enabled=$false },
     [pscustomobject]@{ Id='CheckInstallUtil'; Title='Check InstallUtil'; Category='Security'; Risk='Low'; Description='Creates a report for InstallUtil.exe to detect suspicious or abnormal execution.'; Enabled=$true },
@@ -96,14 +105,44 @@ $script:TweakCatalog = @(
 )
 
 $script:SoftwareCatalog = @(
-    [pscustomobject]@{ Id='GoogleChrome'; Name='Google Chrome'; Category='Browser'; InstallCmd='winget install --id Google.Chrome -e --accept-source-agreements --accept-package-agreements'; Description='Fast and stable browser with strong compatibility.' },
-    [pscustomobject]@{ Id='Brave'; Name='Brave Browser'; Category='Browser'; InstallCmd='winget install --id Brave.Brave -e --accept-source-agreements --accept-package-agreements'; Description='Privacy-focused browser with ad blocking and speed improvements.' },
-    [pscustomobject]@{ Id='Firefox'; Name='Mozilla Firefox'; Category='Browser'; InstallCmd='winget install --id Mozilla.Firefox -e --accept-source-agreements --accept-package-agreements'; Description='Open-source browser for privacy and flexibility.' },
-    [pscustomobject]@{ Id='7Zip'; Name='7-Zip'; Category='Utility'; InstallCmd='winget install --id 7zip.7zip -e --accept-source-agreements --accept-package-agreements'; Description='Powerful archive manager for ZIP, 7z, RAR, and more.' },
-    [pscustomobject]@{ Id='VLC'; Name='VLC Media Player'; Category='Utility'; InstallCmd='winget install --id VideoLAN.VLC -e --accept-source-agreements --accept-package-agreements'; Description='Reliable media player for local files and streaming.' },
-    [pscustomobject]@{ Id='NotepadPlusPlus'; Name='Notepad++'; Category='Utility'; InstallCmd='winget install --id Notepad++.Notepad++ -e --accept-source-agreements --accept-package-agreements'; Description='Lightweight code and text editor with syntax highlighting.' },
-    [pscustomobject]@{ Id='WinRAR'; Name='WinRAR'; Category='Utility'; InstallCmd='winget install --id RARLab.WinRAR -e --accept-source-agreements --accept-package-agreements'; Description='Classic archival tool for compressed files.' },
-    [pscustomobject]@{ Id='MicrosoftPowerToys'; Name='Microsoft PowerToys'; Category='Utility'; InstallCmd='winget install --id Microsoft.PowerToys -e --accept-source-agreements --accept-package-agreements'; Description='Adds useful enhancements like FancyZones, PowerRename, and more.' }
+    [pscustomobject]@{ Id='GoogleChrome'; Name='Google Chrome'; Category='متصفح'; PackageId='Google.Chrome'; Source='winget'; Description='متصفح Google بميزة التوافق مع معظم المواقع والخدمات.' },
+    [pscustomobject]@{ Id='Brave'; Name='Brave Browser'; Category='متصفح'; PackageId='Brave.Brave'; Source='winget'; Description='متصفح يركز على الخصوصية وحجب الإعلانات.' },
+    [pscustomobject]@{ Id='Firefox'; Name='Mozilla Firefox'; Category='متصفح'; PackageId='Mozilla.Firefox'; Source='winget'; Description='متصفح مفتوح المصدر بإعدادات خصوصية مرنة.' },
+    [pscustomobject]@{ Id='7Zip'; Name='7-Zip'; Category='أدوات'; PackageId='7zip.7zip'; Source='winget'; Description='أداة مجانية لضغط واستخراج ZIP و7z وصيغ أخرى.' },
+    [pscustomobject]@{ Id='VLC'; Name='VLC Media Player'; Category='أدوات'; PackageId='VideoLAN.VLC'; Source='winget'; Description='مشغل وسائط مجاني لملفات الفيديو والصوت.' },
+    [pscustomobject]@{ Id='NotepadPlusPlus'; Name='Notepad++'; Category='أدوات'; PackageId='Notepad++.Notepad++'; Source='winget'; Description='محرر نصوص وبرمجة خفيف مع تلوين الصياغة.' },
+    [pscustomobject]@{ Id='WinRAR'; Name='WinRAR'; Category='أدوات'; PackageId='RARLab.WinRAR'; Source='winget'; Description='أداة لإدارة الملفات المضغوطة.' },
+    [pscustomobject]@{ Id='MicrosoftPowerToys'; Name='Microsoft PowerToys'; Category='أدوات'; PackageId='Microsoft.PowerToys'; Source='winget'; Description='أدوات إضافية لـ Windows مثل FancyZones وإعادة تسمية الملفات.' }
+)
+
+$script:DriverCatalog = @(
+    [pscustomobject]@{ Id='NvidiaApp'; Name='NVIDIA App'; Category='NVIDIA'; PackageId='XP8CLZL93F5Z4P'; Source='msstore'; Description='تطبيق NVIDIA الرسمي للتعريفات وإعدادات الألعاب. يتطلب بطاقة NVIDIA.' },
+    [pscustomobject]@{ Id='LenovoSystemUpdate'; Name='Lenovo System Update'; Category='Lenovo'; PackageId='Lenovo.SystemUpdate'; Source='winget'; Description='أداة Lenovo الرسمية لاكتشاف تعريفات وبرامج BIOS المناسبة لأجهزة Lenovo.' },
+    [pscustomobject]@{ Id='HPSupportAssistant'; Name='HP Support Assistant'; Category='HP'; PackageId='HP.SupportAssistant'; Source='winget'; Description='أداة HP الرسمية لاكتشاف تعريفات الجهاز وتحديثها.' },
+    [pscustomobject]@{ Id='IntelDriverSupport'; Name='Intel Driver & Support Assistant'; Category='Intel'; DownloadUrl='https://www.intel.com/content/www/us/en/support/detect.html'; Description='يفتح صفحة Intel الرسمية لفحص تعريفات Intel وتنزيل أداة الدعم.' },
+    [pscustomobject]@{ Id='AmdDrivers'; Name='AMD Drivers'; Category='AMD'; DownloadUrl='https://www.amd.com/en/support/download/drivers.html'; Description='يفتح صفحة AMD الرسمية لاختيار تعريف بطاقة Radeon أو معالج Ryzen حسب طراز الجهاز.' },
+    [pscustomobject]@{ Id='DellDrivers'; Name='Dell Drivers & Downloads'; Category='Dell'; DownloadUrl='https://www.dell.com/support/home'; Description='يفتح دعم Dell الرسمي؛ أدخل Service Tag لاختيار تعريفات جهازك.' },
+    [pscustomobject]@{ Id='AsusDrivers'; Name='ASUS Drivers & Support'; Category='ASUS'; DownloadUrl='https://www.asus.com/support/download-center/'; Description='يفتح مركز ASUS الرسمي للبحث عن تعريفات طراز جهازك.' },
+    [pscustomobject]@{ Id='MsiDrivers'; Name='MSI Drivers & Downloads'; Category='MSI'; DownloadUrl='https://www.msi.com/support/download'; Description='يفتح صفحة MSI الرسمية لاختيار طراز اللوحة أو الجهاز وتعريفاته.' },
+    [pscustomobject]@{ Id='AcerDrivers'; Name='Acer Drivers & Manuals'; Category='Acer'; DownloadUrl='https://www.acer.com/us-en/support/drivers-and-manuals'; Description='يفتح دعم Acer الرسمي للبحث عن التعريفات حسب طراز الجهاز أو الرقم التسلسلي.' }
+)
+$script:DownloadCatalog = @($script:SoftwareCatalog) + @($script:DriverCatalog)
+
+$script:AdvancedSettingCatalog = @(
+    [pscustomobject]@{ Id='DisableSearchIndexer'; Name='تقليل فهرسة البحث'; Description='يقلل نشاط الفهرسة؛ قد يصبح بحث Start أبطأ.' },
+    [pscustomobject]@{ Id='DisableAnyDesk'; Name='إيقاف تشغيل AnyDesk تلقائيًا'; Description='يضبط الخدمة على Manual؛ يبقى تشغيلها اليدوي ممكنًا.' },
+    [pscustomobject]@{ Id='DisableAnimations'; Name='إيقاف المؤثرات'; Description='يوقف الرسوم والشفافية وبعض مؤثرات Windows.' },
+    [pscustomobject]@{ Id='TunePowerOnAC'; Name='تعزيز الأداء عند توصيل الشاحن'; Description='يضبط طاقة المعالج وUSB وPCIe عند التوصيل بالكهرباء فقط.' },
+    [pscustomobject]@{ Id='LimitDefenderCpu'; Name='تقليل حمل فحص Defender'; Description='يحد حمل الفحص فقط؛ لا يوقف الحماية الفورية.' },
+    [pscustomobject]@{ Id='EnableHardwareGpuScheduling'; Name='تفعيل جدولة GPU العتادية'; Description='قد يحسن استجابة الألعاب على عتاد مدعوم؛ يحتاج تعريفًا مناسبًا وإعادة تشغيل.' },
+    [pscustomobject]@{ Id='DisablePowerThrottling'; Name='إلغاء تقييد طاقة التطبيقات'; Description='قد يحسن أداء تطبيقات الخلفية، لكنه قد يزيد حرارة الجهاز واستهلاك البطارية.' },
+    [pscustomobject]@{ Id='FastKillHungApps'; Name='إغلاق التطبيقات العالقة أسرع'; Description='قد يؤدي إلى فقدان عمل غير محفوظ.' },
+    [pscustomobject]@{ Id='DisableHibernation'; Name='تعطيل الإسبات'; Description='يوفر مساحة تقارب حجم RAM، لكنه يعطل الإسبات.' },
+    [pscustomobject]@{ Id='DisableToastNotifs'; Name='إيقاف الإشعارات المنبثقة'; Description='يوقف كل الإشعارات المنبثقة، بما فيها التنبيهات المهمة.' },
+    [pscustomobject]@{ Id='RemoveStoreBloat'; Name='إزالة تطبيقات المتجر المحددة'; Description='يتطلب تأكيد REMOVE إضافيًا؛ لا تشملها الاستعادة.' },
+    [pscustomobject]@{ Id='PickProgramsToUninstall'; Name='اختيار برامج لإزالتها'; Description='يفتح قائمة منفصلة للإزالة؛ راجع أسماء البرامج قبل التأكيد.' },
+    [pscustomobject]@{ Id='DefenderExclusions'; Name='استثناء مجلدات Minecraft'; Description='يقلل فحص هذه المجلدات؛ استخدمه فقط عند الوثوق بمحتواها.' },
+    [pscustomobject]@{ Id='CheckInstallUtil'; Name='إنشاء تقرير InstallUtil'; Description='ينشئ تقريرًا فقط؛ لا يوقف الأداة ولا يحذفها.' }
 )
 
 $script:CustomTweakSelections = @()
@@ -128,6 +167,10 @@ function ApplyTweakSelection {
             'FastKillHungApps'     { $script:FastKillHungApps = $true }
             'TunePowerOnAC'        { $script:TunePowerOnAC = $true }
             'LimitDefenderCpu'     { $script:LimitDefenderCpu = $true }
+            'EnableHardwareGpuScheduling' { $script:EnableHardwareGpuScheduling = $true }
+            'DisablePowerThrottling' { $script:DisablePowerThrottling = $true }
+            'EnableHardwareGpuScheduling' { $script:EnableHardwareGpuScheduling = $true }
+            'DisablePowerThrottling' { $script:DisablePowerThrottling = $true }
             'DisableHibernation'   { $script:DisableHibernation = $true }
             'DefenderExclusions'   { $script:DefenderExclusions = $true }
             'CheckInstallUtil'     { $script:CheckInstallUtil = $true }
@@ -149,62 +192,64 @@ function Show-SoftwareInstallerDialog {
     Add-Type -AssemblyName System.Drawing
 
     $form = New-Object System.Windows.Forms.Form
-    $form.Text = 'Install useful programs'
-    $form.Size = New-Object System.Drawing.Size(760, 560)
+    $form.Text = 'مركز البرامج والتعريفات'
+    $form.Size = New-Object System.Drawing.Size(920, 620)
     $form.StartPosition = 'CenterScreen'
     $form.FormBorderStyle = 'FixedDialog'
     $form.BackColor = [System.Drawing.Color]::FromArgb(18, 18, 22)
     $form.ForeColor = [System.Drawing.Color]::FromArgb(240, 240, 240)
+    $form.RightToLeft = [System.Windows.Forms.RightToLeft]::Yes
+    $form.RightToLeftLayout = $true
     $form.MaximizeBox = $false
     $form.MinimizeBox = $false
 
     $title = New-Object System.Windows.Forms.Label
-    $title.Text = 'Choose programs to install with winget'
+    $title.Text = 'اختر التطبيقات أو أدوات دعم التعريفات'
     $title.Font = New-Object System.Drawing.Font('Segoe UI', 16, [System.Drawing.FontStyle]::Bold)
     $title.Location = New-Object System.Drawing.Point(20, 20)
-    $title.Size = New-Object System.Drawing.Size(520, 32)
+    $title.Size = New-Object System.Drawing.Size(850, 32)
     $form.Controls.Add($title)
 
     $checkedList = New-Object System.Windows.Forms.CheckedListBox
     $checkedList.Location = New-Object System.Drawing.Point(20, 60)
-    $checkedList.Size = New-Object System.Drawing.Size(400, 360)
+    $checkedList.Size = New-Object System.Drawing.Size(430, 450)
     $checkedList.Font = New-Object System.Drawing.Font('Segoe UI', 11)
     $checkedList.BackColor = [System.Drawing.Color]::FromArgb(35, 35, 40)
     $checkedList.ForeColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
-    foreach($app in $script:SoftwareCatalog){
-        $checkedList.Items.Add($app.Name) | Out-Null
+    foreach($app in $script:DownloadCatalog){
+        $checkedList.Items.Add("$($app.Category) | $($app.Name)") | Out-Null
     }
     $form.Controls.Add($checkedList)
 
     $desc = New-Object System.Windows.Forms.Label
-    $desc.Location = New-Object System.Drawing.Point(440, 60)
-    $desc.Size = New-Object System.Drawing.Size(280, 360)
+    $desc.Location = New-Object System.Drawing.Point(470, 60)
+    $desc.Size = New-Object System.Drawing.Size(430, 450)
     $desc.Font = New-Object System.Drawing.Font('Segoe UI', 10)
     $desc.BackColor = [System.Drawing.Color]::FromArgb(32, 32, 36)
     $desc.BorderStyle = 'FixedSingle'
     $desc.Padding = New-Object System.Windows.Forms.Padding(12)
-    $desc.Text = 'Select software to install. This uses winget, which must be available on the system.'
+    $desc.Text = 'حدد العناصر المطلوبة. تُثبّت البرامج عبر winget، وتفتح روابط الشركات صفحات الدعم الرسمية لاختيار الطراز الصحيح.'
     $form.Controls.Add($desc)
 
     $checkedList.Add_SelectedIndexChanged({
         $idx = $checkedList.SelectedIndex
         if($idx -ge 0){
-            $desc.Text = $script:SoftwareCatalog[$idx].Description
+            $desc.Text = $script:DownloadCatalog[$idx].Description
         }
     })
 
     $installBtn = New-Object System.Windows.Forms.Button
-    $installBtn.Text = 'Install selected'
-    $installBtn.Location = New-Object System.Drawing.Point(440, 450)
-    $installBtn.Size = New-Object System.Drawing.Size(140, 38)
+    $installBtn.Text = 'تنفيذ المحدد'
+    $installBtn.Location = New-Object System.Drawing.Point(470, 530)
+    $installBtn.Size = New-Object System.Drawing.Size(180, 38)
     $installBtn.BackColor = [System.Drawing.Color]::FromArgb(0, 140, 92)
     $installBtn.ForeColor = [System.Drawing.Color]::FromArgb(255, 255, 255)
     $installBtn.DialogResult = [System.Windows.Forms.DialogResult]::OK
     $form.Controls.Add($installBtn)
 
     $cancel = New-Object System.Windows.Forms.Button
-    $cancel.Text = 'Close'
-    $cancel.Location = New-Object System.Drawing.Point(590, 450)
+    $cancel.Text = 'إغلاق'
+    $cancel.Location = New-Object System.Drawing.Point(670, 530)
     $cancel.Size = New-Object System.Drawing.Size(120, 38)
     $cancel.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
     $cancel.BackColor = [System.Drawing.Color]::FromArgb(90, 90, 100)
@@ -220,28 +265,113 @@ function Show-SoftwareInstallerDialog {
     $selected = @()
     for($i = 0; $i -lt $checkedList.Items.Count; $i++){
         if($checkedList.GetItemChecked($i)){
-            $selected += $script:SoftwareCatalog[$i]
+            $selected += $script:DownloadCatalog[$i]
         }
     }
 
     if(-not $selected){
-        Write-Host '   No software selected.' -ForegroundColor Yellow
+        Write-Host 'لم تحدد أي عنصر.' -ForegroundColor Yellow
         return
     }
 
-    if(-not (Get-Command winget -ErrorAction SilentlyContinue)){
-        Write-Host '   winget is not available on this machine. Install App Installer or use the Microsoft Store version of winget first.' -ForegroundColor Yellow
-        return
+    $needsWinget = @($selected | Where-Object { $_.PackageId }).Count -gt 0
+    $wingetAvailable = [bool](Get-Command winget -ErrorAction SilentlyContinue)
+    if($needsWinget -and -not $wingetAvailable){
+        Write-Host 'winget غير متوفر؛ ستظل روابط الدعم الرسمية المحددة قابلة للفتح.' -ForegroundColor Yellow
     }
 
     foreach($app in $selected){
-        Write-Host "   Installing: $($app.Name)" -ForegroundColor Cyan
-        try {
-            Invoke-Expression $app.InstallCmd
-        } catch {
-            Write-Host "   Failed to install $($app.Name): $($_.Exception.Message)" -ForegroundColor Red
+        if($app.PackageId){
+            if(-not $wingetAvailable){ continue }
+            $arguments = @('install','--id',$app.PackageId,'--exact','--accept-source-agreements','--accept-package-agreements')
+            if($app.Source -eq 'msstore'){ $arguments += @('--source','msstore') }
+            Write-Host "تثبيت $($app.Name)..." -ForegroundColor Cyan
+            & winget @arguments
+            if($LASTEXITCODE -ne 0){ Write-Host "فشل تثبيت $($app.Name) (رمز $LASTEXITCODE)." -ForegroundColor Red }
+        } elseif($app.DownloadUrl){
+            try {
+                Start-Process -FilePath $app.DownloadUrl -ErrorAction Stop
+            } catch {
+                Write-Host "تعذر فتح صفحة $($app.Name): $($_.Exception.Message)" -ForegroundColor Red
+            }
         }
     }
+}
+
+function Show-AdvancedSettingsDialog {
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+
+    $form = New-Object System.Windows.Forms.Form
+    $form.Text = 'إعدادات وتحسينات متقدمة'
+    $form.Size = New-Object System.Drawing.Size(880, 620)
+    $form.StartPosition = 'CenterScreen'
+    $form.FormBorderStyle = 'FixedDialog'
+    $form.BackColor = [System.Drawing.Color]::FromArgb(18, 18, 22)
+    $form.ForeColor = [System.Drawing.Color]::FromArgb(240, 240, 240)
+    $form.MaximizeBox = $false
+    $form.MinimizeBox = $false
+
+    $title = New-Object System.Windows.Forms.Label
+    $title.Text = 'عدّل الخيارات التي تريدها ثم راجع خطة التنفيذ'
+    $title.Font = New-Object System.Drawing.Font('Segoe UI', 15, [System.Drawing.FontStyle]::Bold)
+    $title.Location = New-Object System.Drawing.Point(20, 18)
+    $title.Size = New-Object System.Drawing.Size(820, 34)
+    $form.Controls.Add($title)
+
+    $checkedList = New-Object System.Windows.Forms.CheckedListBox
+    $checkedList.Location = New-Object System.Drawing.Point(20, 64)
+    $checkedList.Size = New-Object System.Drawing.Size(410, 440)
+    $checkedList.Font = New-Object System.Drawing.Font('Segoe UI', 10)
+    $checkedList.BackColor = [System.Drawing.Color]::FromArgb(35, 35, 40)
+    $checkedList.ForeColor = [System.Drawing.Color]::FromArgb(250, 250, 250)
+    foreach($option in $script:AdvancedSettingCatalog){
+        $index = $checkedList.Items.Add($option.Name)
+        $current = Get-Variable -Name $option.Id -Scope Script -ValueOnly -ErrorAction SilentlyContinue
+        if($null -ne $current){ $checkedList.SetItemChecked($index, [bool]$current) }
+    }
+    $form.Controls.Add($checkedList)
+
+    $description = New-Object System.Windows.Forms.Label
+    $description.Location = New-Object System.Drawing.Point(450, 64)
+    $description.Size = New-Object System.Drawing.Size(390, 440)
+    $description.Font = New-Object System.Drawing.Font('Segoe UI', 11)
+    $description.BackColor = [System.Drawing.Color]::FromArgb(32, 32, 36)
+    $description.ForeColor = [System.Drawing.Color]::FromArgb(240, 240, 240)
+    $description.BorderStyle = 'FixedSingle'
+    $description.Padding = New-Object System.Windows.Forms.Padding(12)
+    $description.Text = 'حدد خيارًا من القائمة لقراءة أثره قبل تطبيقه.'
+    $form.Controls.Add($description)
+
+    $checkedList.Add_SelectedIndexChanged({
+        $index = $checkedList.SelectedIndex
+        if($index -ge 0){ $description.Text = $script:AdvancedSettingCatalog[$index].Description }
+    })
+
+    $apply = New-Object System.Windows.Forms.Button
+    $apply.Text = 'اعتماد الاختيارات'
+    $apply.Location = New-Object System.Drawing.Point(600, 530)
+    $apply.Size = New-Object System.Drawing.Size(150, 40)
+    $apply.DialogResult = [System.Windows.Forms.DialogResult]::OK
+    $apply.BackColor = [System.Drawing.Color]::FromArgb(0, 140, 92)
+    $apply.ForeColor = [System.Drawing.Color]::White
+    $form.Controls.Add($apply)
+
+    $cancel = New-Object System.Windows.Forms.Button
+    $cancel.Text = 'إلغاء'
+    $cancel.Location = New-Object System.Drawing.Point(760, 530)
+    $cancel.Size = New-Object System.Drawing.Size(80, 40)
+    $cancel.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+    $form.Controls.Add($cancel)
+    $form.AcceptButton = $apply
+    $form.CancelButton = $cancel
+
+    if($form.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK){ return $false }
+    for($i = 0; $i -lt $script:AdvancedSettingCatalog.Count; $i++){
+        $option = $script:AdvancedSettingCatalog[$i]
+        Set-Variable -Name $option.Id -Scope Script -Value ([bool]$checkedList.GetItemChecked($i))
+    }
+    return $true
 }
 
 function Get-StartupEntries {
@@ -646,6 +776,8 @@ function Set-OptimizationPreset {
             $script:FastKillHungApps = $false
             $script:TunePowerOnAC = $false
             $script:LimitDefenderCpu = $true
+            $script:EnableHardwareGpuScheduling = $false
+            $script:DisablePowerThrottling = $false
             $script:DisableHibernation = $false
             $script:DefenderExclusions = $false
             $script:CheckInstallUtil = $true
@@ -661,6 +793,8 @@ function Set-OptimizationPreset {
             $script:FastKillHungApps = $false
             $script:TunePowerOnAC = $true
             $script:LimitDefenderCpu = $true
+            $script:EnableHardwareGpuScheduling = $false
+            $script:DisablePowerThrottling = $false
             $script:DisableHibernation = $false
             $script:DefenderExclusions = $false
             $script:CheckInstallUtil = $true
@@ -676,6 +810,8 @@ function Set-OptimizationPreset {
             $script:FastKillHungApps = $false
             $script:TunePowerOnAC = $true
             $script:LimitDefenderCpu = $true
+            $script:EnableHardwareGpuScheduling = $false
+            $script:DisablePowerThrottling = $false
             $script:DisableHibernation = $false
             $script:DefenderExclusions = $false
             $script:CheckInstallUtil = $true
@@ -792,6 +928,8 @@ function Show-CustomTweakChooser {
         [pscustomobject]@{ Name='FastKillHungApps'; Label='Kill hung apps faster'; Description='Can close apps without warning' },
         [pscustomobject]@{ Name='TunePowerOnAC'; Label='Tune power for performance'; Description='Better performance while plugged in' },
         [pscustomobject]@{ Name='LimitDefenderCpu'; Label='Reduce Defender CPU'; Description='Keeps security on while limiting scan load' },
+        [pscustomobject]@{ Name='EnableHardwareGpuScheduling'; Label='Enable GPU scheduling'; Description='Needs supported graphics hardware and a restart' },
+        [pscustomobject]@{ Name='DisablePowerThrottling'; Label='Disable power throttling'; Description='May increase heat and battery use' },
         [pscustomobject]@{ Name='DisableHibernation'; Label='Turn off hibernation'; Description='Frees disk space' },
         [pscustomobject]@{ Name='DefenderExclusions'; Label='Add game exclusions'; Description='Adds .minecraft/.lunarclient exclusions' },
         [pscustomobject]@{ Name='CheckInstallUtil'; Label='Check InstallUtil'; Description='Writes a report for InstallUtil.exe' },
@@ -887,12 +1025,19 @@ function Show-CustomTweakChooser {
             'FastKillHungApps' { $script:FastKillHungApps = $true }
             'TunePowerOnAC' { $script:TunePowerOnAC = $true }
             'LimitDefenderCpu' { $script:LimitDefenderCpu = $true }
+            'EnableHardwareGpuScheduling' { $script:EnableHardwareGpuScheduling = $true }
+            'DisablePowerThrottling' { $script:DisablePowerThrottling = $true }
             'DisableHibernation' { $script:DisableHibernation = $true }
             'DefenderExclusions' { $script:DefenderExclusions = $true }
             'CheckInstallUtil' { $script:CheckInstallUtil = $true }
             'PickProgramsToUninstall' { $script:PickProgramsToUninstall = $true }
         }
     }
+}
+
+if($LaunchMode -eq 'Downloads'){
+    Show-SoftwareInstallerDialog
+    return
 }
 
 switch ($OptimizationProfile) {
@@ -905,6 +1050,8 @@ switch ($OptimizationProfile) {
         $FastKillHungApps        = $false
         $TunePowerOnAC           = $false
         $LimitDefenderCpu        = $true
+        $EnableHardwareGpuScheduling = $false
+        $DisablePowerThrottling  = $false
         $DisableHibernation      = $false
         $DefenderExclusions      = $false
         $CheckInstallUtil        = $true
@@ -922,6 +1069,8 @@ switch ($OptimizationProfile) {
         $FastKillHungApps        = $false
         $TunePowerOnAC           = $true
         $LimitDefenderCpu        = $true
+        $EnableHardwareGpuScheduling = $false
+        $DisablePowerThrottling  = $false
         $DisableHibernation      = $false
         $DefenderExclusions      = $false
         $CheckInstallUtil        = $true
@@ -931,6 +1080,10 @@ switch ($OptimizationProfile) {
         Write-Host "Unknown optimization profile '$OptimizationProfile'. Valid values: Safe, Balanced, Aggressive" -ForegroundColor Red
         return
     }
+}
+
+if($LaunchMode -eq 'AdvancedTweaks'){
+    if(-not (Show-AdvancedSettingsDialog)){ return }
 }
 
 if($EnableInteractiveChoose){
@@ -967,8 +1120,16 @@ $plannedChanges = @(
     'Change privacy, visual, gaming, and other registry settings.',
     'Disable matching startup entries: ' + ($KillStartup -join ', '),
     'Disable matching updater/telemetry scheduled tasks (Google, Adobe, Java, Dell, IObit, and selected Windows telemetry tasks).',
+    'Disable Windows Search indexing: ' + $(if($DisableSearchIndexer){'yes'}else{'no'}),
+    'Set AnyDesk service to Manual: ' + $(if($DisableAnyDesk){'yes'}else{'no'}),
+    'Disable visual effects: ' + $(if($DisableAnimations){'yes'}else{'no'}),
+    'Disable all toast notifications: ' + $(if($DisableToastNotifs){'yes'}else{'no'}),
+    'Close hung apps faster (unsaved work may be lost): ' + $(if($FastKillHungApps){'yes'}else{'no'}),
     'Tune AC power settings: ' + $(if($TunePowerOnAC){'yes'}else{'no'}),
     'Limit Defender scan CPU: ' + $(if($LimitDefenderCpu){'yes'}else{'no'}),
+    'Exclude Minecraft folders from Defender: ' + $(if($DefenderExclusions){'yes'}else{'no'}),
+    'Enable hardware GPU scheduling: ' + $(if($EnableHardwareGpuScheduling){'yes (restart required)'}else{'no'}),
+    'Disable Windows power throttling: ' + $(if($DisablePowerThrottling){'yes (may increase heat/battery use)'}else{'no'}),
     'Disable hibernation: ' + $(if($DisableHibernation){'yes'}else{'no'}),
     'Remove bundled Store apps: ' + $(if($RemoveStoreBloat){'yes'}else{'no'}),
     'Show optional installed-program removal picker: ' + $(if($PickProgramsToUninstall){'yes'}else{'no'}),
@@ -998,6 +1159,12 @@ Start-Transcript "$bk\log.txt" | Out-Null
     DisableAnimations = $DisableAnimations
     TunePowerOnAC = $TunePowerOnAC
     LimitDefenderCpu = $LimitDefenderCpu
+    EnableHardwareGpuScheduling = $EnableHardwareGpuScheduling
+    DisablePowerThrottling = $DisablePowerThrottling
+    OriginalGpuSchedulingPresent = ($null -ne $currentGpuScheduling)
+    OriginalGpuScheduling = $currentGpuScheduling
+    OriginalPowerThrottlingPresent = ($null -ne $currentPowerThrottling)
+    OriginalPowerThrottling = $currentPowerThrottling
     PickProgramsToUninstall = $PickProgramsToUninstall
     Timestamp = (Get-Date).ToString('o')
 } | Export-Clixml "$bk\config.xml"
@@ -1041,7 +1208,9 @@ $regBackupPaths = @(
     'HKCU:\Software\Microsoft\Windows\CurrentVersion\Search',
     'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection',
     'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent',
-    'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize'
+    'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize',
+    'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers',
+    'HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling'
 )
 foreach($p in $regBackupPaths){
     if(Test-Path $p){
@@ -1064,6 +1233,28 @@ if(Test-Path $csv){
     }
 }
 Get-ChildItem -LiteralPath $root -Filter '*_before.reg' | ForEach-Object { & reg.exe import $_.FullName }
+$configPath = Join-Path $root 'config.xml'
+if(Test-Path $configPath){
+    $config = Import-Clixml $configPath
+    $graphicsKey = 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers'
+    $throttlingKey = 'HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling'
+    if($config.PSObject.Properties['OriginalGpuSchedulingPresent']){
+        if($config.OriginalGpuSchedulingPresent){
+            if(-not (Test-Path $graphicsKey)){ New-Item $graphicsKey -Force | Out-Null }
+            Set-ItemProperty -Path $graphicsKey -Name 'HwSchMode' -Value $config.OriginalGpuScheduling -Type DWord -Force
+        } else {
+            Remove-ItemProperty -Path $graphicsKey -Name 'HwSchMode' -ErrorAction SilentlyContinue
+        }
+    }
+    if($config.PSObject.Properties['OriginalPowerThrottlingPresent']){
+        if($config.OriginalPowerThrottlingPresent){
+            if(-not (Test-Path $throttlingKey)){ New-Item $throttlingKey -Force | Out-Null }
+            Set-ItemProperty -Path $throttlingKey -Name 'PowerThrottlingOff' -Value $config.OriginalPowerThrottling -Type DWord -Force
+        } else {
+            Remove-ItemProperty -Path $throttlingKey -Name 'PowerThrottlingOff' -ErrorAction SilentlyContinue
+        }
+    }
+}
 $power = Join-Path $root 'power_before.pow'
 if(Test-Path $power){
     $importOutput = & powercfg.exe /import $power
@@ -1181,6 +1372,20 @@ Set-Reg "$prof\Tasks\Games" 'GPU Priority' 8
 Set-Reg "$prof\Tasks\Games" 'Priority' 6
 Set-Reg "$prof\Tasks\Games" 'Scheduling Category' 'High' 'String'
 Set-Reg "$prof\Tasks\Games" 'SFIO Priority' 'High' 'String'
+$graphicsKey = 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers'
+$throttlingKey = 'HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling'
+if($EnableHardwareGpuScheduling){
+    Set-Reg $graphicsKey 'HwSchMode' 2
+    Write-Host '   hardware GPU scheduling enabled; restart Windows to apply'
+} else {
+    Remove-ItemProperty -Path $graphicsKey -Name 'HwSchMode' -ErrorAction SilentlyContinue
+}
+if($DisablePowerThrottling){
+    Set-Reg $throttlingKey 'PowerThrottlingOff' 1
+    Write-Host '   Windows power throttling disabled; heat and battery use may increase'
+} else {
+    Remove-ItemProperty -Path $throttlingKey -Name 'PowerThrottlingOff' -ErrorAction SilentlyContinue
+}
 
 # ------------------------------------------------------------------ 8. Defender
 Step 8 "Windows Defender: lower CPU load (protection stays ON)"

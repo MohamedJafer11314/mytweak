@@ -92,7 +92,7 @@ static HWND gWindow = nullptr;
 static std::wstring gSelectedProfile = L"Balanced";
 static int gSectionIndex = 0;
 static int gHoverTarget = -1;
-static std::array<float, 31> gHoverLevels{};
+static std::array<float, 33> gHoverLevels{};
 static BYTE gFade = 0;
 static HFONT gFont = nullptr, gBoldFont = nullptr, gSmallFont = nullptr;
 static constexpr UINT_PTR kAnimTimer = 1;
@@ -127,12 +127,16 @@ static RECT GetProfileRect(int i, int mainX, int mainW) {
     return RECT{mainX + i * (w + gap), 184, mainX + i * (w + gap) + w, 270};
 }
 static RECT GetRunRect(int clientW, int clientH) { return RECT{clientW - 228, clientH - 70, clientW - 28, clientH - 22}; }
+static RECT GetDownloadsRect(int clientW, int clientH) { return RECT{clientW - 430, clientH - 70, clientW - 240, clientH - 22}; }
+static RECT GetAdvancedRect(int clientW, int clientH) { return RECT{clientW - 635, clientH - 70, clientW - 445, clientH - 22}; }
 
 static int HitTest(POINT p, int w, int h) {
     for (int i = 0; i < (int)gSections.size(); ++i) { RECT r = GetNavRect(i); if (PtInRect(&r, p)) return i; }
     int mainX = 230, mainW = w - mainX - 26;
     if (gSectionIndex == 0) for (int i = 0; i < 3; ++i) { RECT r = GetProfileRect(i, mainX, mainW); if (PtInRect(&r, p)) return 20 + i; }
     RECT run = GetRunRect(w, h); if (PtInRect(&run, p)) return 30;
+    RECT downloads = GetDownloadsRect(w, h); if (PtInRect(&downloads, p)) return 31;
+    RECT advanced = GetAdvancedRect(w, h); if (PtInRect(&advanced, p)) return 32;
     return -1;
 }
 
@@ -230,9 +234,19 @@ static void Paint(HDC target, RECT client) {
         DrawCard(buffer, r, features[i], i, accent);
     }
 
-    RECT footer{mainX, h - 75, w - 250, h - 23};
-    Text(buffer, L"اختيار الملف هنا يحدد النمط فقط؛ ستظهر معاينة PowerShell قبل أي تغيير.", footer,
+    RECT footer{mainX, h - 75, w - 650, h - 23};
+    Text(buffer, L"راجع الإعدادات والخطة قبل التطبيق.", footer,
          RGB(137, 158, 184), gSmallFont, DT_RIGHT | DT_RTLREADING | DT_VCENTER | DT_WORDBREAK);
+    RECT advanced = GetAdvancedRect(w, h);
+    float advancedHover = gHoverLevels[32];
+    RoundRectFill(buffer, advanced, 13, Mix(RGB(61, 83, 108), RGB(83, 112, 143), advancedHover), RGB(107, 148, 183));
+    RECT advancedText{advanced.left + 6, advanced.top + 1, advanced.right - 6, advanced.bottom - 1};
+    Text(buffer, L"تويكات متقدمة", advancedText, RGB(255, 255, 255), gBoldFont);
+    RECT downloads = GetDownloadsRect(w, h);
+    float downloadsHover = gHoverLevels[31];
+    RoundRectFill(buffer, downloads, 13, Mix(RGB(38, 104, 145), RGB(52, 137, 181), downloadsHover), RGB(87, 174, 211));
+    RECT downloadsText{downloads.left + 6, downloads.top + 1, downloads.right - 6, downloads.bottom - 1};
+    Text(buffer, L"التطبيقات والتعريفات", downloadsText, RGB(255, 255, 255), gBoldFont);
     RECT run = GetRunRect(w, h);
     float runHover = gHoverLevels[30];
     RoundRectFill(buffer, run, 13, Mix(RGB(24, 146, 124), RGB(44, 184, 153), runHover), RGB(66, 211, 178));
@@ -243,7 +257,7 @@ static void Paint(HDC target, RECT client) {
     SelectObject(buffer, oldBitmap); DeleteObject(bitmap); DeleteDC(buffer);
 }
 
-static void LaunchScript() {
+static void LaunchScript(const wchar_t* launchMode) {
     wchar_t module[MAX_PATH] = {};
     DWORD len = GetModuleFileNameW(nullptr, module, MAX_PATH);
     if (!len || len >= MAX_PATH) {
@@ -258,7 +272,7 @@ static void LaunchScript() {
         MessageBoxW(gWindow, L"لم أجد full_optimize.ps1 بجانب البرنامج. ضع الملفين في المجلد نفسه.", L"الملف غير موجود", MB_ICONWARNING | MB_OK);
         return;
     }
-    std::wstring args = L"-NoProfile -ExecutionPolicy Bypass -File \"" + script + L"\" -LaunchProfile \"" + gSelectedProfile + L"\"";
+    std::wstring args = L"-NoProfile -ExecutionPolicy Bypass -File \"" + script + L"\" -LaunchProfile \"" + gSelectedProfile + L"\" -LaunchMode \"" + launchMode + L"\"";
     SHELLEXECUTEINFOW info{};
     info.cbSize = sizeof(info); info.fMask = SEE_MASK_NOCLOSEPROCESS;
     info.lpVerb = L"runas"; info.lpFile = L"powershell.exe"; info.lpParameters = args.c_str();
@@ -313,7 +327,9 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         int hit = HitTest(p, rc.right, rc.bottom);
         if (hit >= 0 && hit < (int)gSections.size()) { gSectionIndex = hit; InvalidateRect(hwnd, nullptr, FALSE); }
         else if (hit >= 20 && hit <= 22) { gSelectedProfile = gProfiles[hit - 20].name; InvalidateRect(hwnd, nullptr, FALSE); }
-        else if (hit == 30) LaunchScript();
+        else if (hit == 30) LaunchScript(L"Optimize");
+        else if (hit == 31) LaunchScript(L"Downloads");
+        else if (hit == 32) LaunchScript(L"AdvancedTweaks");
         return 0;
     }
     case WM_PAINT: {
