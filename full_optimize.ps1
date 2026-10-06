@@ -1,4 +1,7 @@
 #Requires -RunAsAdministrator
+param(
+    [string]$LaunchProfile = ''
+)
 <#
   FULL OPTIMIZE  -  all-in-one (merges: optimize, no_animations, bloat_fix, remove_apps, ultimate_optimize)
 
@@ -13,7 +16,7 @@ $OptimizationProfile     = 'Balanced'  # Safe / Balanced / Aggressive
 $EnableInteractiveChoose = $true       # If true, a window opens before running to let you choose a preset or custom tweaks.
 $DisableSearchIndexer    = $false   # $true = stop Windows Search indexing (Start-menu search gets slower; fine if you use "Everything")
 $DisableAnyDesk          = $false   # $true = AnyDesk service -> Manual (you can still start it by hand)
-$RemoveStoreBloat        = $true    # Clipchamp, Solitaire, Teams, Bing apps, Phone Link, Copilot...
+$RemoveStoreBloat        = $false   # Clipchamp, Solitaire, Teams, Bing apps, Phone Link, Copilot...
 $DisableAnimations       = $true    # animations, transparency, visual effects
 $DisableToastNotifs      = $false   # $true = turn OFF ALL pop-up notifications (was in no_animations.ps1)
 $FastKillHungApps        = $false   # $true = AutoEndTasks: closes hung apps fast. UNSAVED WORK CAN BE LOST
@@ -22,7 +25,11 @@ $LimitDefenderCpu        = $true    # Defender scans use less CPU (protection st
 $DisableHibernation      = $false   # frees disk space (= size of RAM); keep $false if unsure
 $DefenderExclusions      = $false   # exclude .minecraft/.lunarclient from scans (only if you trust your mods)
 $CheckInstallUtil        = $true    # report on InstallUtil.exe if it is running
-$PickProgramsToUninstall = $true    # at the END: a window opens, you choose programs to uninstall
+$PickProgramsToUninstall = $false   # at the END: a window opens, you choose programs to uninstall
+if($LaunchProfile -in @('Safe','Balanced','Aggressive')){
+    $OptimizationProfile = $LaunchProfile
+    $EnableInteractiveChoose = $false
+}
 # Startup entries to disable (wildcards matched against Run-key names). Add/remove as you like.
 # Antivirus products (Avast, AVG...) are NOT in this list on purpose.
 $KillStartup = @('*Driver*Booster*','*IObit*','*Discord*','*Spotify*','*Telegram*','*Steam*','*Teams*',
@@ -37,7 +44,7 @@ $ProtectedApps = @('Microsoft.WindowsStore','Microsoft.WindowsCalculator','Micro
 $script:TweakCatalog = @(
     [pscustomobject]@{ Id='DisableSearchIndexer'; Title='Disable Search Indexer'; Category='Performance'; Risk='Low'; Description='Disables Windows Search indexing to reduce background activity. Useful if you use Everything or similar tools.'; Enabled=$false },
     [pscustomobject]@{ Id='DisableAnyDesk'; Title='Disable AnyDesk'; Category='Services'; Risk='Low'; Description='Sets AnyDesk service to Manual so it stays available but does not run in the background automatically.'; Enabled=$false },
-    [pscustomobject]@{ Id='RemoveStoreBloat'; Title='Remove Store bloat'; Category='Apps'; Risk='Low'; Description='Removes common preinstalled apps like Clipchamp, Teams, Solitaire, Weather, News, Phone Link, and Copilot-related clutter.'; Enabled=$true },
+    [pscustomobject]@{ Id='RemoveStoreBloat'; Title='Remove Store bloat'; Category='Apps'; Risk='Medium'; Description='Removes common preinstalled apps like Clipchamp, Teams, Solitaire, Weather, News, Phone Link, and Copilot-related clutter.'; Enabled=$false },
     [pscustomobject]@{ Id='DisableAnimations'; Title='Disable animations'; Category='Visuals'; Risk='Low'; Description='Disables transparency, animation, taskbar motion, and UI effects for a snappier feeling.'; Enabled=$true },
     [pscustomobject]@{ Id='DisableToastNotifs'; Title='Disable toast notifications'; Category='Privacy'; Risk='Low'; Description='Turns off all popup notifications from Windows to reduce distraction and interruptions.'; Enabled=$false },
     [pscustomobject]@{ Id='FastKillHungApps'; Title='Kill hung apps faster'; Category='Performance'; Risk='Medium'; Description='Changes timeout values so apps that stop responding are torn down faster. Unsaved work can be lost.'; Enabled=$false },
@@ -46,7 +53,7 @@ $script:TweakCatalog = @(
     [pscustomobject]@{ Id='DisableHibernation'; Title='Disable hibernation'; Category='Storage'; Risk='Low'; Description='Turns off hibernation to free disk space equal to RAM size.'; Enabled=$false },
     [pscustomobject]@{ Id='DefenderExclusions'; Title='Game exclusions'; Category='Security'; Risk='Low'; Description='Adds exclusions for .minecraft and .lunarclient if you trust the mod directories.'; Enabled=$false },
     [pscustomobject]@{ Id='CheckInstallUtil'; Title='Check InstallUtil'; Category='Security'; Risk='Low'; Description='Creates a report for InstallUtil.exe to detect suspicious or abnormal execution.'; Enabled=$true },
-    [pscustomobject]@{ Id='PickProgramsToUninstall'; Title='Pick programs to uninstall'; Category='Apps'; Risk='Medium'; Description='Shows a list of non-system apps so you can uninstall extras by selection.'; Enabled=$true },
+    [pscustomobject]@{ Id='PickProgramsToUninstall'; Title='Pick programs to uninstall'; Category='Apps'; Risk='Medium'; Description='Shows a list of non-system apps so you can uninstall extras by selection.'; Enabled=$false },
     [pscustomobject]@{ Id='InstallBrowsers'; Title='Install browsers & tools'; Category='Apps'; Risk='Low'; Description='Offers Chrome, Brave, Firefox, 7-Zip, VLC, and other useful programs using winget.'; Enabled=$false },
     [pscustomobject]@{ Id='ManageStartupItems'; Title='Manage startup apps'; Category='Startup'; Risk='Low'; Description='Shows startup entries and lets you disable unnecessary background apps that launch at logon.'; Enabled=$false },
     [pscustomobject]@{ Id='ManageServices'; Title='Manage Windows services'; Category='Services'; Risk='Medium'; Description='Review common services and switch them to Manual or Disabled based on your needs.'; Enabled=$false },
@@ -617,7 +624,7 @@ function Set-OptimizationPreset {
             $script:OptimizationProfile = 'Balanced'
             $script:DisableSearchIndexer = $false
             $script:DisableAnyDesk = $false
-            $script:RemoveStoreBloat = $true
+            $script:RemoveStoreBloat = $false
             $script:DisableAnimations = $true
             $script:DisableToastNotifs = $false
             $script:FastKillHungApps = $false
@@ -626,7 +633,7 @@ function Set-OptimizationPreset {
             $script:DisableHibernation = $false
             $script:DefenderExclusions = $false
             $script:CheckInstallUtil = $true
-            $script:PickProgramsToUninstall = $true
+            $script:PickProgramsToUninstall = $false
         }
         'Aggressive' {
             $script:OptimizationProfile = 'Aggressive'
@@ -862,10 +869,10 @@ switch ($OptimizationProfile) {
         Write-Host "Optimization profile: Safe (lowest-risk)" -ForegroundColor Green
         $DisableSearchIndexer    = $false
         $RemoveStoreBloat        = $false
-        $DisableAnimations       = $true
+        $DisableAnimations       = $false
         $DisableToastNotifs      = $false
         $FastKillHungApps        = $false
-        $TunePowerOnAC           = $true
+        $TunePowerOnAC           = $false
         $LimitDefenderCpu        = $true
         $DisableHibernation      = $false
         $DefenderExclusions      = $false
@@ -916,66 +923,34 @@ if(-not $isAdmin){
 }
 
 # ---- Profile guard / safe defaults ----
+$Profile = [string]$OptimizationProfile
 $Profile = $Profile.Trim()
-switch($Profile.ToLowerInvariant()){
-    'safe' {
-        $DisableSearchIndexer    = $false
-        $DisableAnyDesk          = $false
-        $RemoveStoreBloat        = $false
-        $DisableAnimations       = $false
-        $DisableToastNotifs      = $false
-        $FastKillHungApps        = $false
-        $TunePowerOnAC           = $false
-        $LimitDefenderCpu        = $true
-        $DisableHibernation      = $false
-        $DefenderExclusions      = $false
-        $CheckInstallUtil        = $true
-        $PickProgramsToUninstall = $false
-        $SkipCriticalServices    = $true
-        Write-Host "Profile: SAFE (least aggressive, more conservative)" -ForegroundColor Green
-    }
-    'balanced' {
-        $DisableSearchIndexer    = $false
-        $DisableAnyDesk          = $false
-        $RemoveStoreBloat        = $true
-        $DisableAnimations       = $true
-        $DisableToastNotifs      = $false
-        $FastKillHungApps        = $false
-        $TunePowerOnAC           = $true
-        $LimitDefenderCpu        = $true
-        $DisableHibernation      = $false
-        $DefenderExclusions      = $false
-        $CheckInstallUtil        = $true
-        $PickProgramsToUninstall = $true
-        $SkipCriticalServices    = $true
-        Write-Host "Profile: BALANCED (recommended default)" -ForegroundColor Cyan
-    }
-    'gaming' {
-        $DisableSearchIndexer    = $true
-        $DisableAnyDesk          = $true
-        $RemoveStoreBloat        = $true
-        $DisableAnimations       = $true
-        $DisableToastNotifs      = $false
-        $FastKillHungApps        = $false
-        $TunePowerOnAC           = $true
-        $LimitDefenderCpu        = $true
-        $DisableHibernation      = $false
-        $DefenderExclusions      = $false
-        $CheckInstallUtil        = $true
-        $PickProgramsToUninstall = $true
-        $SkipCriticalServices    = $false
-        Write-Host "Profile: GAMING (more aggressive tuning)" -ForegroundColor Yellow
-    }
-    default {
-        Write-Host "Unknown profile '$Profile'; using BALANCED defaults." -ForegroundColor Yellow
-        $Profile = 'Balanced'
-    }
+if($Profile -notin @('Safe','Balanced','Aggressive')){
+    Write-Host "Unknown profile '$Profile'; using Balanced defaults." -ForegroundColor Yellow
+    $Profile = 'Balanced'
 }
 
-# ---- Confirmation ----
-Write-Host "FULL OPTIMIZE changes Windows services, registry settings, startup items and may remove apps." -ForegroundColor Yellow
-Write-Host "A restore point and backups are created first. Review the SETTINGS at the top of the script before running." -ForegroundColor Yellow
-if((Read-Host "Continue? (Y/N)") -notmatch '^[Yy]'){ Write-Host "Cancelled."; return }
+# ---- Preview and confirmation ----
+$plannedChanges = @(
+    'Disable services: DiagTrack, dmwappushservice, RetailDemo, RemoteRegistry, and SysMain; set selected optional services to Manual.',
+    'Change privacy, visual, gaming, and other registry settings.',
+    'Disable matching startup entries: ' + ($KillStartup -join ', '),
+    'Disable matching updater/telemetry scheduled tasks (Google, Adobe, Java, Dell, IObit, and selected Windows telemetry tasks).',
+    'Tune AC power settings: ' + $(if($TunePowerOnAC){'yes'}else{'no'}),
+    'Limit Defender scan CPU: ' + $(if($LimitDefenderCpu){'yes'}else{'no'}),
+    'Disable hibernation: ' + $(if($DisableHibernation){'yes'}else{'no'}),
+    'Remove bundled Store apps: ' + $(if($RemoveStoreBloat){'yes'}else{'no'}),
+    'Show optional installed-program removal picker: ' + $(if($PickProgramsToUninstall){'yes'}else{'no'}),
+    'Clean temporary files, run SSD TRIM, and flush DNS.'
+)
+Write-Host "`nFULL OPTIMIZE - planned changes ($Profile profile)" -ForegroundColor Cyan
+$plannedChanges | ForEach-Object { Write-Host "  - $_" }
+Write-Host "`nA restore point and backups are attempted before system changes. Some changes (such as removed apps and startup/task changes) need manual reversal." -ForegroundColor Yellow
+if((Read-Host "Continue with this plan? (Y/N)") -notmatch '^[Yy]'){ Write-Host "Cancelled."; return }
+if($RemoveStoreBloat -and (Read-Host "Store apps will be removed for all users. Type REMOVE to confirm") -cne 'REMOVE'){
+    $RemoveStoreBloat = $false
+    Write-Host "Store app removal skipped; continuing with the other selected changes." -ForegroundColor Yellow
+}
 
 $ErrorActionPreference = 'SilentlyContinue'
 $stamp = Get-Date -Format 'yyyyMMdd_HHmm'
@@ -1045,6 +1020,28 @@ foreach($p in $regBackupPaths){
 }
 $active = ((powercfg /getactivescheme) -replace '.*:\s*([0-9a-fA-F-]{36}).*','$1').Trim()
 powercfg /export "$bk\power_before.pow" $active | Out-Null
+$restoreScript = @'
+# Best-effort restore of the snapshots saved by this run.
+# Run this file from an elevated Windows PowerShell session.
+$ErrorActionPreference = 'Continue'
+$root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$csv = Join-Path $root 'services_before.csv'
+if(Test-Path $csv){
+    Import-Csv $csv | ForEach-Object {
+        $mode = switch($_.StartMode){ 'Auto' {'Automatic'} 'Manual' {'Manual'} 'Disabled' {'Disabled'} default {$null} }
+        if($mode){ try { Set-Service -Name $_.Name -StartupType $mode -ErrorAction Stop } catch { Write-Warning "Could not restore service $($_.Name): $_" } }
+    }
+}
+Get-ChildItem -LiteralPath $root -Filter '*_before.reg' | ForEach-Object { & reg.exe import $_.FullName }
+$power = Join-Path $root 'power_before.pow'
+if(Test-Path $power){
+    $importOutput = & powercfg.exe /import $power
+    $guid = ($importOutput | Out-String) -replace '.*GUID:\s*([0-9a-fA-F-]{36}).*','$1'
+    if($guid -match '^[0-9a-fA-F-]{36}$'){ & powercfg.exe /setactive $guid }
+}
+Write-Host 'Restore attempt finished. Restart Windows and review any warnings above.' -ForegroundColor Yellow
+'@
+Set-Content -LiteralPath "$bk\restore_settings.ps1" -Value $restoreScript -Encoding UTF8
 Write-Host "   backup folder: $bk"
 
 # ------------------------------------------------------------------ 2. Services

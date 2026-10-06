@@ -1,34 +1,15 @@
-# Optimizer UI (C++ Win32)
+# واجهة مُحسِّن Windows (C++ Win32)
 
-This folder contains a lightweight Windows desktop frontend that launches the PowerShell optimizer script with a clean dark-mode style.
+هذا المجلد يحتوي على واجهة عربية لتشغيل `full_optimize.ps1` واختيار ملف التشغيل.
 
-## What it does
+## البناء
 
-- Shows a dark themed optimizer window
-- Lets the user choose a profile: Safe / Balanced / Aggressive / Custom
-- Runs the optimizer as Administrator using PowerShell
-- Keeps the logic in the original PowerShell script while improving the UI feel
+1. افتح Developer Command Prompt for Visual Studio.
+2. شغّل `build_optimizer_ui.bat`.
+3. سينتج الملف `OptimizerUI.exe`.
 
-## Files
+ضع `full_optimize.ps1` بجانب الملف التنفيذي. عند الضغط على زر التشغيل، تفتح الواجهة PowerShell بصلاحيات المسؤول وتمرّر ملف التحسين المختار. يعرض السكربت بعد ذلك خطة التغييرات ويطلب التأكيد.
 
-- `OptimizerUI.cpp` — Win32 desktop application
-- `build_optimizer_ui.bat` — build script for MSVC
+## نطاق الواجهة
 
-## Build
-
-1. Open a Developer Command Prompt for Visual Studio.
-2. Run:
-
-```bat
-build_optimizer_ui.bat
-```
-
-3. The resulting executable is `OptimizerUI.exe`.
-
-## Important note
-
-The script still requires the main optimizer file to be present beside the app, or you can adjust the path in the code.
-
-```powershell
-full_optimize.ps1
-```
+صفحات الفئات تشرح وظائف السكربت ولا تمثل مفاتيح مستقلة لكل تعديل. راجع [دليل التعديلات بالعربية](../TWEAKS_AR.md) وتفاصيل الخطة في PowerShell قبل التنفيذ.
