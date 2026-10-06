@@ -6,6 +6,7 @@
 
 - [تنزيل ملفات المشروع ZIP](https://github.com/MohamedJafer11314/mytweak/archive/refs/heads/main.zip)
 - [فتح السكربت لمراجعته](https://github.com/MohamedJafer11314/mytweak/blob/main/full_optimize.ps1)
+- [مراجعة مشغّل الواجهة](launch_optimizer.ps1)
 - [شرح التعديلات بالعربية](TWEAKS_AR.md)
 - [واجهة Windows الرسومية](cpp_ui)
 
@@ -18,7 +19,7 @@
 افتح Windows PowerShell ثم نفّذ الأمر التالي؛ لا تحتاج إلى تشغيل PowerShell كمسؤول لفتح الواجهة:
 
 ```powershell
-irm https://raw.githubusercontent.com/MohamedJafer11314/mytweak/main/full_optimize.ps1 | iex
+irm https://raw.githubusercontent.com/MohamedJafer11314/mytweak/main/launch_optimizer.ps1 | iex
 ```
 
 ينزّل الأمر الواجهة العربية والسكربت المطابق لها من GitHub ويفتح الواجهة. عند الضغط على التشغيل، يطلب Windows صلاحيات المسؤول ثم يعرض السكربت خطة التغييرات وتأكيدها. هذا الأسلوب ينفّذ ملفات من الإنترنت؛ راجع المصدر ولا تستخدمه إلا إذا كنت تثق بالمستودع. لتشغيل نسخة نزلتها يدويًا ومراجعتها، اتبع الخطوات التالية.
