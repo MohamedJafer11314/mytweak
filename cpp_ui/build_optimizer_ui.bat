@@ -8,7 +8,7 @@ if errorlevel 1 (
 )
 
 cd /d "%~dp0"
-cl /nologo /EHsc /utf-8 /DUNICODE /D_UNICODE /std:c++17 /FeOptimizerUI.exe OptimizerUI.cpp user32.lib gdi32.lib shell32.lib comctl32.lib
+cl /nologo /EHsc /utf-8 /MT /std:c++17 /FeOptimizerUI.exe OptimizerUI.cpp user32.lib gdi32.lib shell32.lib comctl32.lib
 if errorlevel 1 (
     echo Build failed.
     exit /b 1
